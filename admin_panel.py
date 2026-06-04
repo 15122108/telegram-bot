@@ -24,34 +24,34 @@ LANG_COOKIE = "admin_lang"
 CURRENT_ADMIN_LANG = "uz"
 ADMIN_TEXT = {
     "uz": {
-        "dashboard": "Dashboard",
-        "orders": "Orders",
+        "dashboard": "Bosh sahifa",
+        "orders": "Buyurtmalar",
         "visa_reminders": "Viza muddati",
-        "users": "Users",
-        "support": "Support",
-        "packages": "eSIM Packages",
-        "settings": "Settings",
-        "export": "Export",
-        "broadcast": "Broadcast",
+        "users": "Foydalanuvchilar",
+        "support": "Yordam",
+        "packages": "eSIM paketlar",
+        "settings": "Sozlamalar",
+        "export": "Eksport",
+        "broadcast": "Ommaviy xabar",
         "logout": "Logout",
         "login_title": "Visa eSIM Admin",
         "login_hint": "Panelga kirish uchun parolni kiriting.",
         "password": "Parol",
         "login": "Kirish",
         "wrong_password": "Parol noto'g'ri yoki sozlanmagan.",
-        "panel_private": "Panel localhost orqali ishlaydi. Public internetga ochilmagan.",
-        "pending": "Pending",
-        "order_sum": "Order sum",
-        "open_support": "Open support",
+        "panel_private": "Admin panel himoyalangan. Public link bo'lsa ham parolsiz ochilmaydi.",
+        "pending": "Kutilmoqda",
+        "order_sum": "Buyurtmalar summasi",
+        "open_support": "Ochiq yordam xabarlari",
         "change_password": "Admin panel parolini almashtirish",
         "old_password": "Eski parol",
         "new_password": "Yangi parol",
         "repeat_password": "Yangi parolni takrorlang",
         "save": "Saqlash",
         "change_password_btn": "Parolni almashtirish",
-        "bot_payment_settings": "Bot va to'lov sozlamalari",
+        "bot_payment_settings": "Bot, to'lov va eSIM sozlamalari",
         "settings_saved": "Sozlamalar saqlandi.",
-        "packages_title": "eSIM Packages",
+        "packages_title": "eSIM paketlar",
         "add_update_country": "Davlat qo'shish yoki yangilash",
         "code": "Kod",
         "country_name": "Davlat nomi",
@@ -60,34 +60,34 @@ ADMIN_TEXT = {
         "country": "Davlat",
         "plan": "Paket",
         "price": "Narx",
-        "status": "Status",
-        "user": "User",
-        "action": "Action",
-        "done": "Done",
-        "cancel": "Cancel",
-        "delete": "Delete",
-        "created": "Created",
-        "sent": "Sent",
+        "status": "Holat",
+        "user": "Foydalanuvchi",
+        "action": "Amal",
+        "done": "Bajarildi",
+        "cancel": "Bekor qilish",
+        "delete": "O'chirish",
+        "created": "Yaratilgan",
+        "sent": "Yuborilgan",
         "username": "Username",
-        "name": "Name",
-        "language": "Language",
-        "last_activity": "Last activity",
-        "sum": "Sum",
+        "name": "Ism",
+        "language": "Til",
+        "last_activity": "Oxirgi faollik",
+        "sum": "Summa",
         "send_via_bot": "Bot orqali xabar yuborish",
         "reply_placeholder": "Mijozga javob matnini yozing...",
         "send": "Yuborish",
         "telegram_reply_hint": "Yoki Telegramdan",
-        "support_questions": "Support savollari",
+        "support_questions": "Yordam savollari",
         "question": "Savol",
         "file": "Fayl",
         "answer": "Javob",
         "no_file": "Fayl yo'q",
         "open_download": "Ochish/yuklash",
-        "select_support": "Support xabar tanlang.",
+        "select_support": "Yordam xabarini tanlang.",
         "client": "Mijoz",
         "reply_write": "Javob yozing...",
         "send_reply": "Javob yuborish",
-        "support_state": "Support holati",
+        "support_state": "Yordam holati",
         "open_messages_suffix": "ta ochiq xabar.",
         "enable_notifications": "Bildirishnomani yoqish",
         "notify_unsupported": "Bu brauzer notification qo'llamaydi.",
@@ -96,7 +96,7 @@ ADMIN_TEXT = {
         "new_support": "Yangi support xabar",
         "new_support_body": "Mijoz yangi xabar yubordi",
         "password_changed_hint": "Parol o'zgargandan keyin xavfsizlik uchun qayta login qilish kerak bo'ladi.",
-        "payment_settings_hint": "To'lov va Airalo sozlamalari .env faylga yoziladi. Bot ularni keyingi so'rovlarda o'qiydi.",
+        "payment_settings_hint": "To'lov va eSIM Go sozlamalari .env faylga yoziladi. Bot ularni keyingi so'rovlarda o'qiydi.",
         "card_holder": "Karta egasi",
         "card_number": "Karta raqami",
         "qr_image_file": "QR rasm fayli",
@@ -134,6 +134,9 @@ ADMIN_TEXT = {
         "all_users": "Hamma foydalanuvchilar",
         "send_broadcast": "Hammaga yuborish",
         "broadcast_done": "Yuborildi: {sent}. Xato/bloklagan: {failed}.",
+        "esim_countries": "eSIM davlatlar",
+        "no_users_hint": "Hali foydalanuvchi yo'q. Botni /start qilgan odamlar shu yerda ko'rinadi.",
+        "esimgo_api_base": "eSIM Go API manzili",
     },
     "ru": {
         "dashboard": "Панель",
@@ -246,6 +249,9 @@ ADMIN_TEXT = {
         "all_users": "Все пользователи",
         "send_broadcast": "Отправить всем",
         "broadcast_done": "Отправлено: {sent}. Ошибок/блокировок: {failed}.",
+        "esim_countries": "eSIM страны",
+        "no_users_hint": "Пока нет пользователей. Люди появятся здесь после /start в боте.",
+        "esimgo_api_base": "eSIM Go API Base",
     },
     "en": {
         "dashboard": "Dashboard",
@@ -358,6 +364,9 @@ ADMIN_TEXT = {
         "all_users": "All users",
         "send_broadcast": "Send to all",
         "broadcast_done": "Sent: {sent}. Failed/blocked: {failed}.",
+        "esim_countries": "eSIM countries",
+        "no_users_hint": "No users yet. People who press /start in the bot appear here.",
+        "esimgo_api_base": "eSIM Go API Base",
     },
 }
 DEFAULT_PACKAGES = {
@@ -657,7 +666,7 @@ def dashboard():
   <div class="card"><div class="muted">{esc(admin_t("orders"))}</div><div class="num">{len(orders)}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("pending"))}</div><div class="num">{pending}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("order_sum"))}</div><div class="num">${revenue:.2f}</div></div>
-  <div class="card"><div class="muted">eSIM davlatlar</div><div class="num">{esim_count}</div></div>
+  <div class="card"><div class="muted">{esc(admin_t("esim_countries"))}</div><div class="num">{esim_count}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("visa_reminders"))}</div><div class="num">{len(reminders)}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("users"))}</div><div class="num">{len(users)}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("open_support"))}</div><div class="num">{open_support}</div></div>
@@ -789,7 +798,7 @@ def users_page():
             f"<td>${user.get('orders_sum', 0):.2f}</td><td>{esc(user.get('reminders_count'))}</td>"
             f"<td>{esc(user.get('support_count'))}</td><td>{esc(user.get('last_activity'))}</td></tr>"
         )
-    empty = "" if rows else "<p class='muted'>Hali foydalanuvchi yo'q. Botni /start qilgan odamlar shu yerda ko'rinadi.</p>"
+    empty = "" if rows else f"<p class='muted'>{esc(admin_t('no_users_hint'))}</p>"
     body = f"<h3>{esc(admin_t('users'))}</h3>{empty}<table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('username'))}</th><th>{esc(admin_t('name'))}</th><th>{esc(admin_t('language'))}</th><th>{esc(admin_t('orders'))}</th><th>{esc(admin_t('pending'))}</th><th>{esc(admin_t('sum'))}</th><th>{esc(admin_t('visa_reminders'))}</th><th>{esc(admin_t('support'))}</th><th>{esc(admin_t('last_activity'))}</th></tr>" + "".join(rows) + "</table>"
     return layout(admin_t("users"), body)
 
@@ -1055,7 +1064,7 @@ def settings_page(message: str = "", error: str = ""):
         ("AIRALO_CLIENT_ID", admin_t("airalo_client_id")),
         ("AIRALO_CLIENT_SECRET", admin_t("airalo_client_secret")),
         ("ESIMGO_API_KEY", admin_t("esimgo_api_key")),
-        ("ESIMGO_API_BASE", "eSIM Go API Base"),
+        ("ESIMGO_API_BASE", admin_t("esimgo_api_base")),
         ("ESIM_MARKUP_PERCENT", admin_t("esim_markup_percent")),
     ]
     settings_inputs = "\n".join(
