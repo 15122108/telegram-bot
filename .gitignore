@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.env
+orders.json
+users.json
+reminders.json
+states.json
+support_messages.json
+esim_packages.json
+bot.log
+bot.err.log
+bot.pid
+*.log
+payment_qr.jpg
+payment_qr.png

@@ -1,0 +1,17 @@
+[Unit]
+Description=Visa eSIM Bot Admin Panel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/visa-esim-uz-bot
+EnvironmentFile=/opt/visa-esim-uz-bot/.env
+ExecStart=/usr/bin/python3 /opt/visa-esim-uz-bot/admin_panel.py
+Restart=always
+RestartSec=5
+User=visa-bot
+Group=visa-bot
+
+[Install]
+WantedBy=multi-user.target
