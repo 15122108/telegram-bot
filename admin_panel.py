@@ -690,7 +690,8 @@ async function pollDashboardUsers() {{
     if (node) node.textContent = data.count;
   }} catch (error) {{}}
 }}
-setInterval(pollDashboardUsers, 180000);
+pollDashboardUsers();
+setInterval(pollDashboardUsers, 3000);
 </script>
 """
     return layout(admin_t("dashboard"), body)
@@ -855,7 +856,8 @@ async function pollUsers() {{
   }} catch (error) {{}}
 }}
 
-setInterval(pollUsers, 180000);
+pollUsers();
+setInterval(pollUsers, 3000);
 </script>
 """
     return layout(admin_t("users"), body)
