@@ -14,3 +14,5 @@ bot.pid
 *.log
 payment_qr.jpg
 payment_qr.png
+admin-panel-url.txt
+admin-panel-profile/

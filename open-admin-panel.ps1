@@ -2,7 +2,26 @@ $ErrorActionPreference = "SilentlyContinue"
 
 $workspace = "C:\Users\acer\Documents\New project\telegram-bot"
 $tunnelScript = Join-Path $workspace "keep-admin-panel-tunnel.ps1"
-$panelUrl = "http://127.0.0.1:8088/login"
+$urlFile = Join-Path $workspace "admin-panel-url.txt"
+$defaultPanelUrl = "http://127.0.0.1:8088/login"
+$panelUrl = $defaultPanelUrl
+
+if (Test-Path -LiteralPath $urlFile) {
+    $configuredUrl = (Get-Content -LiteralPath $urlFile -Raw).Trim()
+    if ($configuredUrl) {
+        $panelUrl = $configuredUrl
+    }
+}
+
+if ($env:VISA_ESIM_ADMIN_URL) {
+    $panelUrl = $env:VISA_ESIM_ADMIN_URL.Trim()
+}
+
+if ($panelUrl -notmatch "/login$") {
+    $panelUrl = $panelUrl.TrimEnd("/") + "/login"
+}
+
+$usesLocalTunnel = $panelUrl -like "http://127.0.0.1:*" -or $panelUrl -like "http://localhost:*"
 $edgePaths = @(
     "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
     "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
@@ -17,7 +36,7 @@ function Test-Panel {
     }
 }
 
-if (-not (Test-Panel)) {
+if ($usesLocalTunnel -and -not (Test-Panel)) {
     Start-Process -WindowStyle Hidden `
         -FilePath "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" `
         -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $tunnelScript)
@@ -42,6 +61,6 @@ for ($i = 0; $i -lt 20; $i++) {
 
 Add-Type -AssemblyName PresentationFramework
 [System.Windows.MessageBox]::Show(
-    "Admin panel hali ochilmadi. Internet yoki VPS aloqasini tekshiring, keyin shortcutni qayta bosing.",
+    "Admin panel hali ochilmadi. Linkni tekshiring: $panelUrl",
     "Visa eSIM Admin Panel"
 ) | Out-Null
