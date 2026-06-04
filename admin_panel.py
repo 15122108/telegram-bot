@@ -646,16 +646,18 @@ def layout(title: str, body: str) -> bytes:
 def dashboard():
     orders = read_json("orders.json", [])
     reminders = read_json("reminders.json", [])
-    users = read_json("users.json", {})
+    users = collect_users()
     support_messages = read_json("support_messages.json", [])
     pending = sum(1 for order in orders if order.get("status") == "pending_payment")
     open_support = sum(1 for item in support_messages if item.get("status") != "replied")
     revenue = sum(float(order.get("price_usd", 0)) for order in orders)
+    esim_count = esim_country_count()
     body = f"""
 <div class="cards">
   <div class="card"><div class="muted">{esc(admin_t("orders"))}</div><div class="num">{len(orders)}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("pending"))}</div><div class="num">{pending}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("order_sum"))}</div><div class="num">${revenue:.2f}</div></div>
+  <div class="card"><div class="muted">eSIM davlatlar</div><div class="num">{esim_count}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("visa_reminders"))}</div><div class="num">{len(reminders)}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("users"))}</div><div class="num">{len(users)}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("open_support"))}</div><div class="num">{open_support}</div></div>
@@ -663,6 +665,14 @@ def dashboard():
 <p class="muted">{esc(admin_t("panel_private"))}</p>
 """
     return layout(admin_t("dashboard"), body)
+
+
+def esim_country_count() -> int:
+    cache = read_json("esimgo_catalogue_cache.json", {})
+    if isinstance(cache, dict) and isinstance(cache.get("packages"), dict):
+        return len(cache["packages"])
+    packages = read_packages()
+    return len(packages)
 
 
 def orders_page():
@@ -779,7 +789,8 @@ def users_page():
             f"<td>${user.get('orders_sum', 0):.2f}</td><td>{esc(user.get('reminders_count'))}</td>"
             f"<td>{esc(user.get('support_count'))}</td><td>{esc(user.get('last_activity'))}</td></tr>"
         )
-    body = f"<h3>{esc(admin_t('users'))}</h3><table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('username'))}</th><th>{esc(admin_t('name'))}</th><th>{esc(admin_t('language'))}</th><th>{esc(admin_t('orders'))}</th><th>{esc(admin_t('pending'))}</th><th>{esc(admin_t('sum'))}</th><th>{esc(admin_t('visa_reminders'))}</th><th>{esc(admin_t('support'))}</th><th>{esc(admin_t('last_activity'))}</th></tr>" + "".join(rows) + "</table>"
+    empty = "" if rows else "<p class='muted'>Hali foydalanuvchi yo'q. Botni /start qilgan odamlar shu yerda ko'rinadi.</p>"
+    body = f"<h3>{esc(admin_t('users'))}</h3>{empty}<table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('username'))}</th><th>{esc(admin_t('name'))}</th><th>{esc(admin_t('language'))}</th><th>{esc(admin_t('orders'))}</th><th>{esc(admin_t('pending'))}</th><th>{esc(admin_t('sum'))}</th><th>{esc(admin_t('visa_reminders'))}</th><th>{esc(admin_t('support'))}</th><th>{esc(admin_t('last_activity'))}</th></tr>" + "".join(rows) + "</table>"
     return layout(admin_t("users"), body)
 
 
