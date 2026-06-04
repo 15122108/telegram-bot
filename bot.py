@@ -19,8 +19,10 @@ REMINDERS_FILE = DATA_DIR / "reminders.json"
 STATES_FILE = DATA_DIR / "states.json"
 SUPPORT_FILE = DATA_DIR / "support_messages.json"
 PACKAGES_FILE = DATA_DIR / "esim_packages.json"
+ESIMGO_CATALOGUE_CACHE_FILE = DATA_DIR / "esimgo_catalogue_cache.json"
 USERS_CACHE: dict | None = None
 STATES_CACHE: dict | None = None
+ESIMGO_CATALOGUE_CACHE: dict | None = None
 
 DEFAULT_LANG = "uz"
 SUPPORTED_LANGS = {"uz", "ru", "en"}
@@ -165,6 +167,13 @@ DEFAULT_ESIM_PACKAGES = {
 
 
 def esim_packages() -> dict:
+    if esimgo_enabled():
+        try:
+            packages = esimgo_catalogue()
+            if packages:
+                return packages
+        except Exception as exc:
+            print(f"eSIM Go catalogue error: {exc}")
     packages = read_json_file(PACKAGES_FILE, None)
     if not isinstance(packages, dict) or not packages:
         return DEFAULT_ESIM_PACKAGES
@@ -233,6 +242,179 @@ def telegram_request(token: str, method: str, payload: dict | None = None) -> di
         raise RuntimeError(f"Telegram API error: {result}")
 
     return result
+
+
+def esimgo_api_key() -> str:
+    load_env_file(Path(__file__).with_name(".env"))
+    return os.environ.get("ESIMGO_API_KEY", "").strip()
+
+
+def esimgo_api_base() -> str:
+    load_env_file(Path(__file__).with_name(".env"))
+    return os.environ.get("ESIMGO_API_BASE", "https://api.esim-go.com/v2.4").rstrip("/")
+
+
+def esimgo_request(path: str, payload: dict | None = None, timeout: int = 25) -> dict:
+    api_key = esimgo_api_key()
+    if not api_key:
+        raise RuntimeError("ESIMGO_API_KEY topilmadi")
+
+    data = None
+    headers = {
+        "X-API-Key": api_key,
+        "User-Agent": "visa-esim-uz-bot/1.0",
+        "Accept": "application/json",
+    }
+    method = "GET"
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+        method = "POST"
+
+    request = urllib.request.Request(
+        f"{esimgo_api_base()}{path}",
+        data=data,
+        headers=headers,
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            body = response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "ignore")
+        raise RuntimeError(f"eSIM Go API error {exc.code}: {detail or exc.reason}") from exc
+    return json.loads(body) if body else {}
+
+
+def mb_to_label(amount_mb: int | float | str) -> str:
+    try:
+        amount = float(amount_mb)
+    except (TypeError, ValueError):
+        return str(amount_mb)
+    if amount >= 1024 and amount % 1024 == 0:
+        return f"{int(amount / 1024)}GB"
+    if amount >= 1024:
+        return f"{amount / 1024:.1f}GB"
+    return f"{int(amount)}MB"
+
+
+def price_to_usd(price) -> float:
+    try:
+        value = float(price)
+    except (TypeError, ValueError):
+        return 0.0
+    if value > 100:
+        return round(value / 10000, 2)
+    return round(value, 2)
+
+
+def esimgo_bundle_country(bundle: dict) -> tuple[str, str]:
+    countries = bundle.get("countries") or bundle.get("roamingEnabled") or []
+    if countries and isinstance(countries[0], dict):
+        country = countries[0]
+        code = normalize_query(country.get("iso") or country.get("name") or bundle.get("name") or "")
+        name = str(country.get("name") or code).strip()
+        return code, name
+    name = str(bundle.get("description") or bundle.get("name") or "Global").strip()
+    return normalize_query(name), name
+
+
+def normalize_esimgo_catalogue(raw) -> dict:
+    if isinstance(raw, dict):
+        bundles = raw.get("bundles") or raw.get("data") or raw.get("items") or raw.get("results") or []
+    else:
+        bundles = raw
+    packages: dict[str, dict] = {}
+    for bundle in bundles:
+        if not isinstance(bundle, dict):
+            continue
+        bundle_name = str(bundle.get("name") or bundle.get("bundleName") or "").strip()
+        if not bundle_name:
+            continue
+        code, country_name = esimgo_bundle_country(bundle)
+        data_label = mb_to_label(bundle.get("dataAmount") or bundle.get("data") or "")
+        duration = bundle.get("duration") or bundle.get("days") or ""
+        days_label = f"{duration} kun" if str(duration).isdigit() else str(duration)
+        price = price_to_usd(bundle.get("price") or bundle.get("priceUsd") or bundle.get("cost") or 0)
+        if not code or not country_name or not data_label or not days_label:
+            continue
+        plan = {
+            "data": data_label,
+            "days": days_label,
+            "price_usd": price,
+            "bundle_name": bundle_name,
+            "description": str(bundle.get("description") or "").strip(),
+        }
+        packages.setdefault(code, {"country": country_name, "plans": []})["plans"].append(plan)
+
+    for package in packages.values():
+        package["plans"].sort(key=lambda p: (p.get("price_usd", 0), p.get("data", "")))
+        package["plans"] = package["plans"][:8]
+    return dict(sorted(packages.items(), key=lambda item: item[1]["country"]))
+
+
+def esimgo_catalogue(force_refresh: bool = False) -> dict:
+    global ESIMGO_CATALOGUE_CACHE
+    if ESIMGO_CATALOGUE_CACHE is not None and not force_refresh:
+        return ESIMGO_CATALOGUE_CACHE
+    cached = read_json_file(ESIMGO_CATALOGUE_CACHE_FILE, {})
+    now = time.time()
+    if not force_refresh and isinstance(cached, dict) and cached.get("packages"):
+        if now - float(cached.get("updated_at", 0)) < 24 * 3600:
+            ESIMGO_CATALOGUE_CACHE = cached["packages"]
+            return ESIMGO_CATALOGUE_CACHE
+    raw = esimgo_request("/catalogue?page=1&perPage=500&direction=asc&orderBy=description")
+    packages = normalize_esimgo_catalogue(raw)
+    if packages:
+        write_json_file(
+            ESIMGO_CATALOGUE_CACHE_FILE,
+            {"updated_at": now, "packages": packages},
+        )
+        ESIMGO_CATALOGUE_CACHE = packages
+        return packages
+    return {}
+
+
+def esimgo_enabled() -> bool:
+    return bool(esimgo_api_key())
+
+
+def esimgo_create_esim(bundle_name: str) -> dict:
+    return esimgo_request(
+        "/orders",
+        {
+            "type": "transaction",
+            "assign": True,
+            "order": [
+                {
+                    "type": "bundle",
+                    "quantity": 1,
+                    "item": bundle_name,
+                    "allowReassign": False,
+                }
+            ],
+        },
+        timeout=40,
+    )
+
+
+def first_esim_from_order(response: dict) -> dict:
+    for item in response.get("order", []) or []:
+        esims = item.get("esims") or []
+        if esims and isinstance(esims[0], dict):
+            return esims[0]
+    return {}
+
+
+def plan_tuple(plan) -> tuple[str, str, float]:
+    if isinstance(plan, dict):
+        return (
+            str(plan.get("data") or "").strip(),
+            str(plan.get("days") or "").strip(),
+            float(plan.get("price_usd") or 0),
+        )
+    data, days, price = plan
+    return str(data), str(days), float(price)
 
 
 def send_message(token: str, chat_id: int, text: str, reply_markup: dict | None = None) -> None:
@@ -468,7 +650,7 @@ def main_menu(lang: str = DEFAULT_LANG) -> dict:
 
 
 def esim_country_menu(lang: str = DEFAULT_LANG) -> dict:
-    buttons = [(package["country"], f"esim:{code}") for code, package in esim_packages().items()]
+    buttons = [(package["country"][:45], f"esim:{code}") for code, package in list(esim_packages().items())[:80]]
     return inline_menu(buttons, back=True, lang=lang)
 
 
@@ -477,10 +659,10 @@ def esim_plan_menu(country_code: str, lang: str = DEFAULT_LANG) -> dict:
     if not package:
         return esim_country_menu(lang)
 
-    buttons = [
-        (f"{data} / {days} / ${price}", f"buy:{country_code}:{data}")
-        for data, days, price in package["plans"]
-    ]
+    buttons = []
+    for index, plan in enumerate(package["plans"][:8]):
+        data, days, price = plan_tuple(plan)
+        buttons.append((f"{data} / {days} / ${price}", f"buy:{country_code}:p{index}"))
     buttons.append((t(lang, "back_countries"), "menu:esim"))
     buttons.append((t(lang, "back_main"), "menu:main"))
     return inline_menu(buttons)
@@ -507,7 +689,7 @@ def normalize_query(value: str) -> str:
 def format_esim_list() -> str:
     lines = []
     for code, package in esim_packages().items():
-        cheapest = min(plan[2] for plan in package["plans"])
+        cheapest = min(plan_tuple(plan)[2] for plan in package["plans"])
         lines.append(f"- {package['country']}: ${cheapest} dan, /esim {code}")
 
     return "Mavjud eSIM yo'nalishlari:\n" + "\n".join(lines)
@@ -520,8 +702,8 @@ def format_esim_country(country_code: str) -> str:
         return format_esim_list()
 
     lines = "\n".join(
-        f"- {data}, {days}: ${price} - /buy {key} {data}"
-        for data, days, price in package["plans"]
+        f"- {plan_tuple(plan)[0]}, {plan_tuple(plan)[1]}: ${plan_tuple(plan)[2]} - menyudan tanlang"
+        for plan in package["plans"]
     )
     return f"{package['country']} eSIM paketlari:\n{lines}"
 
@@ -544,16 +726,12 @@ def build_payment_text(country_code: str, data: str, lang: str = DEFAULT_LANG) -
             "en": "No eSIM package was found for this country. Open the eSIM menu.",
         }[lang]
 
-    selected_plan = None
-    for plan in package["plans"]:
-        if plan[0].lower() == data.lower():
-            selected_plan = plan
-            break
+    selected_plan = find_plan(package, data)
 
     if selected_plan is None:
         return format_esim_country(country_code)
 
-    data, days, price = selected_plan
+    data, days, price = plan_tuple(selected_plan)
     if lang == "ru":
         payment_lines = [
             f"Заказ: {package['country']} eSIM {data}, {days}",
@@ -649,23 +827,117 @@ def update_order_status(order_id: str, status: str) -> dict | None:
     return None
 
 
+def find_order(order_id: str) -> dict | None:
+    normalized_id = order_id.strip().upper().lstrip("#")
+    for order in read_orders():
+        if order.get("id", "").upper() == normalized_id:
+            return order
+    return None
+
+
+def save_order(updated_order: dict) -> None:
+    orders = read_orders()
+    for index, order in enumerate(orders):
+        if order.get("id") == updated_order.get("id"):
+            orders[index] = updated_order
+            write_orders(orders)
+            return
+    orders.append(updated_order)
+    write_orders(orders)
+
+
+def find_plan(package: dict, plan_key: str):
+    plans = package.get("plans") or []
+    if plan_key.startswith("p") and plan_key[1:].isdigit():
+        index = int(plan_key[1:])
+        if 0 <= index < len(plans):
+            return plans[index]
+    for plan in plans:
+        data, _days, _price = plan_tuple(plan)
+        if data.lower() == plan_key.lower():
+            return plan
+    return None
+
+
+def customer_esim_text(order: dict, lang: str = DEFAULT_LANG) -> str:
+    smdp = order.get("smdpAddress", "")
+    matching = order.get("matchingId", "")
+    iccid = order.get("iccid", "")
+    lpa = f"LPA:1${smdp}${matching}" if smdp and matching else ""
+    if lang == "ru":
+        lines = [
+            f"Ваш eSIM готов. Заказ #{order['id']}",
+            f"Пакет: {order.get('country')} - {order.get('data')}, {order.get('days')}",
+            "",
+            "Данные для установки:",
+        ]
+    elif lang == "en":
+        lines = [
+            f"Your eSIM is ready. Order #{order['id']}",
+            f"Plan: {order.get('country')} - {order.get('data')}, {order.get('days')}",
+            "",
+            "Installation details:",
+        ]
+    else:
+        lines = [
+            f"eSIM tayyor. Buyurtma #{order['id']}",
+            f"Paket: {order.get('country')} - {order.get('data')}, {order.get('days')}",
+            "",
+            "O'rnatish ma'lumotlari:",
+        ]
+    if iccid:
+        lines.append(f"ICCID: {iccid}")
+    if smdp:
+        lines.append(f"SMDP+: {smdp}")
+    if matching:
+        lines.append(f"Activation code: {matching}")
+    if lpa:
+        lines.extend(["", f"Manual install code:\n{lpa}"])
+    return "\n".join(lines)
+
+
+def fulfill_order_with_esimgo(order_id: str) -> tuple[dict | None, str]:
+    order = find_order(order_id)
+    if not order:
+        return None, "Buyurtma topilmadi."
+    if order.get("status") == "fulfilled" and order.get("matchingId"):
+        return order, "Bu buyurtma avval fulfill qilingan."
+    bundle_name = order.get("bundle_name")
+    if not bundle_name:
+        return None, "Bu order eSIM Go bundle bilan bog'lanmagan."
+    response = esimgo_create_esim(bundle_name)
+    esim = first_esim_from_order(response)
+    if not esim:
+        return None, f"eSIM Go javobida eSIM ma'lumoti topilmadi: {response}"
+    order.update(
+        {
+            "status": "fulfilled",
+            "fulfilled_at": datetime.now(timezone.utc).isoformat(),
+            "provider_order_reference": response.get("orderReference", ""),
+            "provider_status": response.get("status", ""),
+            "iccid": esim.get("iccid", ""),
+            "matchingId": esim.get("matchingId", ""),
+            "smdpAddress": esim.get("smdpAddress", ""),
+            "provider_response": response,
+        }
+    )
+    save_order(order)
+    return order, "eSIM yaratildi."
+
+
 def create_order(user: dict, country_code: str, data: str) -> dict | None:
     package = esim_packages().get(country_code)
     if not package:
         return None
 
-    selected_plan = None
-    for plan in package["plans"]:
-        if plan[0].lower() == data.lower():
-            selected_plan = plan
-            break
+    selected_plan = find_plan(package, data)
 
     if selected_plan is None:
         return None
 
     orders = read_orders()
     order_id = f"VE-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{len(orders) + 1:04d}"
-    plan_data, days, price = selected_plan
+    plan_data, days, price = plan_tuple(selected_plan)
     order = {
         "id": order_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -678,6 +950,8 @@ def create_order(user: dict, country_code: str, data: str) -> dict | None:
         "data": plan_data,
         "days": days,
         "price_usd": price,
+        "provider": "esimgo" if isinstance(selected_plan, dict) and selected_plan.get("bundle_name") else "manual",
+        "bundle_name": selected_plan.get("bundle_name", "") if isinstance(selected_plan, dict) else "",
     }
     orders.append(order)
     write_orders(orders)
@@ -687,6 +961,9 @@ def create_order(user: dict, country_code: str, data: str) -> dict | None:
 def format_order_for_admin(order: dict) -> str:
     username = order.get("username")
     user_ref = f"@{username}" if username else f"id:{order.get('user_id')}"
+    provider_line = f"\nProvider: {order.get('provider') or 'manual'}"
+    if order.get("bundle_name"):
+        provider_line += f"\nBundle: {order['bundle_name']}"
     return (
         f"Yangi eSIM buyurtma #{order['id']}\n"
         f"Davlat: {order['country']}\n"
@@ -694,6 +971,8 @@ def format_order_for_admin(order: dict) -> str:
         f"Narx: ${order['price_usd']}\n"
         f"Status: {order['status']}\n"
         f"Mijoz: {user_ref}"
+        f"{provider_line}\n"
+        f"Tasdiqlash: /fulfill {order['id']} yoki /done {order['id']}"
     )
 
 
@@ -979,6 +1258,8 @@ def admin_help_text() -> str:
         "Admin komandalar:\n"
         "/stats - statistika\n"
         "/orders - oxirgi buyurtmalar\n"
+        "/refresh_esim - eSIM Go katalogni yangilash\n"
+        "/fulfill ORDER_ID - eSIM Go orqali real eSIM yaratish va mijozga yuborish\n"
         "/done ORDER_ID - buyurtmani bajarildi qilish\n"
         "/cancel ORDER_ID - buyurtmani bekor qilish\n"
         "/reply USER_ID matn - mijozga javob yozish"
@@ -1303,6 +1584,34 @@ def build_reply(token: str, message: dict) -> tuple[str, dict | None]:
             return t(lang, "admin_only"), main_menu(lang)
         return format_recent_orders(), main_menu(lang)
 
+    if text.startswith("/refresh_esim"):
+        if not is_admin_chat(message.get("chat", {}).get("id")):
+            return t(lang, "admin_only"), main_menu(lang)
+        try:
+            packages = esimgo_catalogue(force_refresh=True)
+        except Exception as exc:
+            return f"eSIM Go katalog yangilanmadi: {exc}", main_menu(lang)
+        return f"eSIM Go katalog yangilandi. Davlatlar: {len(packages)}", main_menu(lang)
+
+    if text.startswith("/fulfill"):
+        if not is_admin_chat(message.get("chat", {}).get("id")):
+            return t(lang, "admin_only"), main_menu(lang)
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2:
+            return "Format: /fulfill VE-20260526-0001", main_menu(lang)
+        try:
+            order, message_text = fulfill_order_with_esimgo(parts[1])
+        except Exception as exc:
+            return f"eSIM yaratilmadi: {exc}", main_menu(lang)
+        if not order:
+            return message_text, main_menu(lang)
+        try:
+            customer_lang = get_user_lang(order.get("user_id"))
+            send_message(token, int(order["user_id"]), customer_esim_text(order, customer_lang))
+        except Exception as exc:
+            return f"{message_text}\nLekin mijozga yuborilmadi: {exc}", main_menu(lang)
+        return f"{message_text}\nMijozga yuborildi: #{order['id']}", main_menu(lang)
+
     if text.startswith("/done"):
         if not is_admin_chat(message.get("chat", {}).get("id")):
             return t(lang, "admin_only"), main_menu(lang)
@@ -1429,8 +1738,8 @@ def build_callback_reply(token: str, callback_query: dict) -> tuple[str, dict | 
         if not package:
             return t(lang, "not_found"), esim_country_menu(lang)
         lines = "\n".join(
-            f"- {plan_data}, {days}: ${price}"
-            for plan_data, days, price in package["plans"]
+            f"- {plan_tuple(plan)[0]}, {plan_tuple(plan)[1]}: ${plan_tuple(plan)[2]}"
+            for plan in package["plans"]
         )
         return (
             f"{package['country']} eSIM paketlari:\n{lines}\n\n{t(lang, 'select_plan')}",

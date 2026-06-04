@@ -7,6 +7,7 @@ reminders.json
 states.json
 support_messages.json
 esim_packages.json
+esimgo_catalogue_cache.json
 bot.log
 bot.err.log
 bot.pid
