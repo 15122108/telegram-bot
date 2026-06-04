@@ -137,6 +137,9 @@ ADMIN_TEXT = {
         "esim_countries": "eSIM davlatlar",
         "no_users_hint": "Hali foydalanuvchi yo'q. Botni /start qilgan odamlar shu yerda ko'rinadi.",
         "esimgo_api_base": "eSIM Go API manzili",
+        "new_user": "Yangi foydalanuvchi",
+        "new_user_body": "Botga yangi foydalanuvchi qo'shildi",
+        "users_state": "Foydalanuvchilar holati",
     },
     "ru": {
         "dashboard": "Панель",
@@ -252,6 +255,9 @@ ADMIN_TEXT = {
         "esim_countries": "eSIM страны",
         "no_users_hint": "Пока нет пользователей. Люди появятся здесь после /start в боте.",
         "esimgo_api_base": "eSIM Go API Base",
+        "new_user": "Новый пользователь",
+        "new_user_body": "В боте появился новый пользователь",
+        "users_state": "Состояние пользователей",
     },
     "en": {
         "dashboard": "Dashboard",
@@ -367,6 +373,9 @@ ADMIN_TEXT = {
         "esim_countries": "eSIM countries",
         "no_users_hint": "No users yet. People who press /start in the bot appear here.",
         "esimgo_api_base": "eSIM Go API Base",
+        "new_user": "New user",
+        "new_user_body": "A new user joined the bot",
+        "users_state": "Users status",
     },
 }
 DEFAULT_PACKAGES = {
@@ -787,8 +796,9 @@ def collect_users():
 
 
 def users_page():
+    users = collect_users()
     rows = []
-    for user in collect_users():
+    for user in users:
         user_id = user.get("user_id")
         username = f"@{user.get('username')}" if user.get("username") else ""
         rows.append(
@@ -799,8 +809,58 @@ def users_page():
             f"<td>{esc(user.get('support_count'))}</td><td>{esc(user.get('last_activity'))}</td></tr>"
         )
     empty = "" if rows else f"<p class='muted'>{esc(admin_t('no_users_hint'))}</p>"
-    body = f"<h3>{esc(admin_t('users'))}</h3>{empty}<table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('username'))}</th><th>{esc(admin_t('name'))}</th><th>{esc(admin_t('language'))}</th><th>{esc(admin_t('orders'))}</th><th>{esc(admin_t('pending'))}</th><th>{esc(admin_t('sum'))}</th><th>{esc(admin_t('visa_reminders'))}</th><th>{esc(admin_t('support'))}</th><th>{esc(admin_t('last_activity'))}</th></tr>" + "".join(rows) + "</table>"
+    latest = users[0] if users else {}
+    body = f"""
+<h3>{esc(admin_t('users'))}</h3>
+<p class="muted"><b>{esc(admin_t('users_state'))}:</b> <span id="users-count">{len(users)}</span></p>
+{empty}
+<table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('username'))}</th><th>{esc(admin_t('name'))}</th><th>{esc(admin_t('language'))}</th><th>{esc(admin_t('orders'))}</th><th>{esc(admin_t('pending'))}</th><th>{esc(admin_t('sum'))}</th><th>{esc(admin_t('visa_reminders'))}</th><th>{esc(admin_t('support'))}</th><th>{esc(admin_t('last_activity'))}</th></tr>{"".join(rows)}</table>
+<script>
+let latestUserId = {json.dumps(latest.get("user_id", ""))};
+let usersCount = {len(users)};
+const userNotifyTitle = {json.dumps(admin_t("new_user"))};
+const userNotifyBody = {json.dumps(admin_t("new_user_body"))};
+
+function notifyUserJoined(data) {{
+  try {{
+    if ("Notification" in window && Notification.permission === "granted") {{
+      new Notification(userNotifyTitle, {{ body: data.latest_user || userNotifyBody }});
+    }}
+  }} catch (error) {{}}
+}}
+
+async function pollUsers() {{
+  try {{
+    const response = await fetch("/users-state?latest=" + encodeURIComponent(latestUserId), {{cache: "no-store"}});
+    const data = await response.json();
+    document.getElementById("users-count").textContent = data.count;
+    if (data.count > usersCount || (data.latest_id && data.latest_id !== latestUserId)) {{
+      notifyUserJoined(data);
+      setTimeout(function() {{ window.location.reload(); }}, 900);
+      return;
+    }}
+    usersCount = data.count;
+    latestUserId = data.latest_id || latestUserId;
+  }} catch (error) {{}}
+}}
+
+setInterval(pollUsers, 180000);
+</script>
+"""
     return layout(admin_t("users"), body)
+
+
+def users_state() -> bytes:
+    users = collect_users()
+    latest = users[0] if users else {}
+    username = latest.get("username") or latest.get("first_name") or latest.get("user_id") or ""
+    payload = {
+        "count": len(users),
+        "latest_id": latest.get("user_id", ""),
+        "latest_user": f"@{username}" if latest.get("username") else username,
+        "latest_activity": latest.get("last_activity", ""),
+    }
+    return json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
 
 def user_detail_page(user_id: str):
@@ -1576,6 +1636,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         elif path == "/support-state":
             content = support_state()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+            return
+        elif path == "/users-state":
+            content = users_state()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(content)))
