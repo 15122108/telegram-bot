@@ -291,6 +291,8 @@ def mb_to_label(amount_mb: int | float | str) -> str:
         amount = float(amount_mb)
     except (TypeError, ValueError):
         return str(amount_mb)
+    if amount < 0:
+        return "Cheksiz"
     if amount >= 1024 and amount % 1024 == 0:
         return f"{int(amount / 1024)}GB"
     if amount >= 1024:
@@ -306,6 +308,18 @@ def price_to_usd(price) -> float:
     if value > 100:
         return round(value / 10000, 2)
     return round(value, 2)
+
+
+def esim_markup_percent() -> float:
+    load_env_file(Path(__file__).with_name(".env"))
+    try:
+        return max(0.0, float(os.environ.get("ESIM_MARKUP_PERCENT", "30")))
+    except ValueError:
+        return 30.0
+
+
+def sale_price(cost_usd: float) -> float:
+    return round(float(cost_usd) * (1 + esim_markup_percent() / 100), 2)
 
 
 def esimgo_bundle_country(bundle: dict) -> tuple[str, str]:
@@ -335,13 +349,14 @@ def normalize_esimgo_catalogue(raw) -> dict:
         data_label = mb_to_label(bundle.get("dataAmount") or bundle.get("data") or "")
         duration = bundle.get("duration") or bundle.get("days") or ""
         days_label = f"{duration} kun" if str(duration).isdigit() else str(duration)
-        price = price_to_usd(bundle.get("price") or bundle.get("priceUsd") or bundle.get("cost") or 0)
+        cost = price_to_usd(bundle.get("price") or bundle.get("priceUsd") or bundle.get("cost") or 0)
         if not code or not country_name or not data_label or not days_label:
             continue
         plan = {
             "data": data_label,
             "days": days_label,
-            "price_usd": price,
+            "cost_usd": cost,
+            "price_usd": sale_price(cost),
             "bundle_name": bundle_name,
             "description": str(bundle.get("description") or "").strip(),
         }
@@ -415,6 +430,12 @@ def plan_tuple(plan) -> tuple[str, str, float]:
         )
     data, days, price = plan
     return str(data), str(days), float(price)
+
+
+def plan_cost(plan) -> float:
+    if isinstance(plan, dict):
+        return float(plan.get("cost_usd") or plan.get("price_usd") or 0)
+    return float(plan[2])
 
 
 def send_message(token: str, chat_id: int, text: str, reply_markup: dict | None = None) -> None:
@@ -938,6 +959,7 @@ def create_order(user: dict, country_code: str, data: str) -> dict | None:
     orders = read_orders()
     order_id = f"VE-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{len(orders) + 1:04d}"
     plan_data, days, price = plan_tuple(selected_plan)
+    cost = plan_cost(selected_plan)
     order = {
         "id": order_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -950,6 +972,8 @@ def create_order(user: dict, country_code: str, data: str) -> dict | None:
         "data": plan_data,
         "days": days,
         "price_usd": price,
+        "cost_usd": cost,
+        "profit_usd": round(price - cost, 2),
         "provider": "esimgo" if isinstance(selected_plan, dict) and selected_plan.get("bundle_name") else "manual",
         "bundle_name": selected_plan.get("bundle_name", "") if isinstance(selected_plan, dict) else "",
     }
@@ -969,6 +993,8 @@ def format_order_for_admin(order: dict) -> str:
         f"Davlat: {order['country']}\n"
         f"Paket: {order['data']}, {order['days']}\n"
         f"Narx: ${order['price_usd']}\n"
+        f"Tan narx: ${order.get('cost_usd', order.get('price_usd'))}\n"
+        f"Foyda: ${order.get('profit_usd', 0)}\n"
         f"Status: {order['status']}\n"
         f"Mijoz: {user_ref}"
         f"{provider_line}\n"
@@ -1109,11 +1135,15 @@ def format_stats() -> str:
     total = len(orders)
     pending = sum(1 for order in orders if order.get("status") == "pending_payment")
     revenue = sum(float(order.get("price_usd", 0)) for order in orders)
+    cost = sum(float(order.get("cost_usd", order.get("price_usd", 0)) or 0) for order in orders)
+    profit = sum(float(order.get("profit_usd", 0) or 0) for order in orders)
     return (
         "Admin statistika:\n"
         f"Buyurtmalar: {total}\n"
         f"To'lov kutayotgan: {pending}\n"
-        f"Jami order summasi: ${revenue:.2f}"
+        f"Jami order summasi: ${revenue:.2f}\n"
+        f"Tan narx: ${cost:.2f}\n"
+        f"Taxminiy foyda: ${profit:.2f}"
     )
 
 
@@ -1125,7 +1155,7 @@ def format_recent_orders(limit: int = 10) -> str:
     lines = []
     for order in reversed(orders):
         lines.append(
-            f"#{order['id']} | {order['country']} | {order['data']} | ${order['price_usd']} | {order['status']}"
+            f"#{order['id']} | {order['country']} | {order['data']} | ${order['price_usd']} | foyda ${order.get('profit_usd', 0)} | {order['status']}"
         )
     return "Oxirgi buyurtmalar:\n" + "\n".join(lines)
 

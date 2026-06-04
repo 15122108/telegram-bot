@@ -110,6 +110,7 @@ ADMIN_TEXT = {
         "airalo_client_id": "Airalo Client ID",
         "airalo_client_secret": "Airalo Client Secret",
         "esimgo_api_key": "eSIM Go API Key",
+        "esim_markup_percent": "eSIM ustama foizi",
         "package_hint": "3 tagacha paket kiriting. Bo'sh paketlar saqlanmaydi.",
         "package_1": "1-paket",
         "package_2": "2-paket",
@@ -221,6 +222,7 @@ ADMIN_TEXT = {
         "airalo_client_id": "Airalo Client ID",
         "airalo_client_secret": "Airalo Client Secret",
         "esimgo_api_key": "eSIM Go API Key",
+        "esim_markup_percent": "Наценка eSIM, %",
         "package_hint": "Введите до 3 пакетов. Пустые пакеты не сохраняются.",
         "package_1": "1-пакет",
         "package_2": "2-пакет",
@@ -332,6 +334,7 @@ ADMIN_TEXT = {
         "airalo_client_id": "Airalo Client ID",
         "airalo_client_secret": "Airalo Client Secret",
         "esimgo_api_key": "eSIM Go API Key",
+        "esim_markup_percent": "eSIM markup percent",
         "package_hint": "Enter up to 3 packages. Empty packages are not saved.",
         "package_1": "Package 1",
         "package_2": "Package 2",
@@ -996,6 +999,8 @@ def settings_page(message: str = "", error: str = ""):
         ("AIRALO_CLIENT_ID", admin_t("airalo_client_id")),
         ("AIRALO_CLIENT_SECRET", admin_t("airalo_client_secret")),
         ("ESIMGO_API_KEY", admin_t("esimgo_api_key")),
+        ("ESIMGO_API_BASE", "eSIM Go API Base"),
+        ("ESIM_MARKUP_PERCENT", admin_t("esim_markup_percent")),
     ]
     settings_inputs = "\n".join(
         f"<p><label>{esc(label)}</label><br><input type='text' name='{esc(key)}' value='{esc(read_env(key))}'></p>"
@@ -1066,6 +1071,8 @@ def update_bot_settings(params: dict) -> None:
         "AIRALO_CLIENT_ID",
         "AIRALO_CLIENT_SECRET",
         "ESIMGO_API_KEY",
+        "ESIMGO_API_BASE",
+        "ESIM_MARKUP_PERCENT",
     ]
     write_env_values({key: params.get(key, [""])[0].strip() for key in keys})
 
