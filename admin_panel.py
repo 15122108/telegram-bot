@@ -677,10 +677,21 @@ def dashboard():
   <div class="card"><div class="muted">{esc(admin_t("order_sum"))}</div><div class="num">${revenue:.2f}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("esim_countries"))}</div><div class="num">{esim_count}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("visa_reminders"))}</div><div class="num">{len(reminders)}</div></div>
-  <div class="card"><div class="muted">{esc(admin_t("users"))}</div><div class="num">{len(users)}</div></div>
+  <div class="card"><div class="muted">{esc(admin_t("users"))}</div><div class="num" id="dashboard-users-count">{len(users)}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("open_support"))}</div><div class="num">{open_support}</div></div>
 </div>
 <p class="muted">{esc(admin_t("panel_private"))}</p>
+<script>
+async function pollDashboardUsers() {{
+  try {{
+    const response = await fetch("/users-state", {{cache: "no-store"}});
+    const data = await response.json();
+    const node = document.getElementById("dashboard-users-count");
+    if (node) node.textContent = data.count;
+  }} catch (error) {{}}
+}}
+setInterval(pollDashboardUsers, 180000);
+</script>
 """
     return layout(admin_t("dashboard"), body)
 
