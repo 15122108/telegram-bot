@@ -562,10 +562,27 @@ def set_user_lang(user: dict, lang: str) -> None:
     if lang not in SUPPORTED_LANGS or user.get("id") is None:
         return
     users = read_users()
+    current = users.get(str(user["id"]), {})
     users[str(user["id"])] = {
         "lang": lang,
-        "username": user.get("username"),
-        "first_name": user.get("first_name"),
+        "username": user.get("username") or current.get("username"),
+        "first_name": user.get("first_name") or current.get("first_name"),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    write_users(users)
+
+
+def remember_user(user: dict) -> None:
+    user_id = user.get("id")
+    if user_id is None:
+        return
+    users = read_users()
+    current = users.get(str(user_id), {})
+    lang = current.get("lang", DEFAULT_LANG)
+    users[str(user_id)] = {
+        "lang": lang if lang in SUPPORTED_LANGS else DEFAULT_LANG,
+        "username": user.get("username") or current.get("username"),
+        "first_name": user.get("first_name") or current.get("first_name"),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     write_users(users)
@@ -1814,6 +1831,7 @@ def handle_update(token: str, update: dict) -> None:
     callback_query = update.get("callback_query")
     if callback_query:
         answer_callback_query(token, callback_query["id"])
+        remember_user(callback_query.get("from", {}))
         message = callback_query.get("message", {})
         chat_id = message.get("chat", {}).get("id")
         if chat_id is None:
@@ -1840,6 +1858,7 @@ def handle_update(token: str, update: dict) -> None:
         return
 
     user_id = message.get("from", {}).get("id")
+    remember_user(message.get("from", {}))
     text = message.get("text") or message.get("caption")
     has_support_attachment = bool(support_attachment(message))
     if not text and not (has_support_attachment and get_user_state(user_id)):
