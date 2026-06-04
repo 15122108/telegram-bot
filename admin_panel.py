@@ -514,7 +514,7 @@ def login_page(error: str = "") -> bytes:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{esc(admin_t("login_title"))}</title>
+  <title>Visa eSIM Admin Panel</title>
   <style>
     body {{ margin: 0; font-family: Arial, sans-serif; background: #f5f7fb; color: #172033; display: grid; min-height: 100vh; place-items: center; }}
     .box {{ width: min(420px, calc(100vw - 32px)); background: white; border: 1px solid #dde3ee; border-radius: 8px; padding: 22px; }}
@@ -556,7 +556,7 @@ def layout(title: str, body: str) -> bytes:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{esc(title)}</title>
+  <title>Visa eSIM Admin Panel - {esc(title)}</title>
   <style>
     :root {{ --blue: #123d76; --line: #dde3ee; --bg: #f5f7fb; --text: #172033; }}
     * {{ box-sizing: border-box; }}

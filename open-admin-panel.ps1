@@ -43,6 +43,21 @@ function Test-Panel {
     }
 }
 
+function Activate-ExistingPanel {
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+        if ($shell.AppActivate("Visa eSIM Admin Panel")) {
+            return $true
+        }
+        if ($shell.AppActivate("Visa eSIM Admin")) {
+            return $true
+        }
+    } catch {
+        return $false
+    }
+    return $false
+}
+
 function Start-LocalPanel {
     $python = $pythonPaths | Where-Object {
         if ($_ -eq "python.exe") { return $true }
@@ -72,6 +87,10 @@ if ($usesLocalTunnel -and -not (Test-Panel)) {
 
 for ($i = 0; $i -lt 20; $i++) {
     if (Test-Panel) {
+        if (Activate-ExistingPanel) {
+            exit 0
+        }
+
         $edge = $edgePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
         if ($edge) {
             Start-Process -FilePath $edge -ArgumentList @(
