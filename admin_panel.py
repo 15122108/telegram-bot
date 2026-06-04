@@ -539,6 +539,18 @@ def login_page(error: str = "") -> bytes:
 
 
 def layout(title: str, body: str) -> bytes:
+    nav_items = [
+        ("/", admin_t("dashboard")),
+        ("/orders", admin_t("orders")),
+        ("/reminders", admin_t("visa_reminders")),
+        ("/users", admin_t("users")),
+        ("/support", admin_t("support")),
+        ("/broadcast", admin_t("broadcast")),
+        ("/packages", admin_t("packages")),
+        ("/settings", admin_t("settings")),
+        ("/export", admin_t("export")),
+    ]
+    nav_html = "\n".join(f'<a href="{href}">{esc(label)}</a>' for href, label in nav_items)
     page = f"""<!doctype html>
 <html lang="uz">
 <head>
@@ -546,16 +558,31 @@ def layout(title: str, body: str) -> bytes:
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{esc(title)}</title>
   <style>
-    body {{ margin: 0; font-family: Arial, sans-serif; background: #f5f7fb; color: #172033; }}
-    header {{ background: #123d76; color: white; padding: 16px 22px; }}
-    nav {{ display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 22px; background: white; border-bottom: 1px solid #dde3ee; }}
-    nav a {{ color: #123d76; text-decoration: none; padding: 8px 10px; border: 1px solid #cdd8ea; border-radius: 6px; }}
+    :root {{ --blue: #123d76; --line: #dde3ee; --bg: #f5f7fb; --text: #172033; }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: Arial, sans-serif; background: var(--bg); color: var(--text); }}
+    .shell {{ display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }}
+    aside {{ background: #0f2f5f; color: white; padding: 18px 14px; }}
+    .brand {{ display: flex; align-items: center; gap: 10px; padding: 8px 10px 18px; border-bottom: 1px solid rgba(255,255,255,.18); margin-bottom: 14px; }}
+    .brand-mark {{ width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; background: #1f63b5; font-weight: 700; }}
+    .brand-title {{ font-weight: 700; line-height: 1.2; }}
+    .brand-sub {{ color: #b9c8dc; font-size: 12px; margin-top: 2px; }}
+    nav {{ display: grid; gap: 6px; }}
+    nav a {{ color: #edf5ff; text-decoration: none; padding: 10px 11px; border-radius: 7px; display: block; }}
+    nav a:hover {{ background: rgba(255,255,255,.12); }}
+    .sidebar-foot {{ margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.18); display: grid; gap: 8px; }}
+    .sidebar-foot a {{ color: #d9e8fb; text-decoration: none; font-size: 13px; }}
+    .content {{ min-width: 0; }}
+    header {{ background: white; border-bottom: 1px solid var(--line); padding: 16px 22px; display: flex; justify-content: space-between; align-items: center; gap: 14px; }}
+    header h2 {{ margin: 0; font-size: 20px; }}
+    .langbar {{ display: flex; gap: 8px; flex-wrap: wrap; }}
+    .langbar a {{ color: var(--blue); text-decoration: none; border: 1px solid #cdd8ea; border-radius: 6px; padding: 6px 8px; background: #fff; }}
     main {{ padding: 22px; }}
     table {{ width: 100%; border-collapse: collapse; background: white; border: 1px solid #dde3ee; }}
     th, td {{ padding: 10px; border-bottom: 1px solid #edf1f7; text-align: left; vertical-align: top; }}
     th {{ background: #eef4ff; }}
     .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }}
-    .card {{ background: white; border: 1px solid #dde3ee; border-radius: 8px; padding: 14px; }}
+    .card {{ background: white; border: 1px solid #dde3ee; border-radius: 8px; padding: 14px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }}
     .num {{ font-size: 28px; font-weight: 700; }}
     form {{ display: inline; }}
     textarea {{ width: 100%; min-height: 110px; padding: 10px; border: 1px solid #cdd8ea; border-radius: 6px; resize: vertical; box-sizing: border-box; }}
@@ -573,26 +600,44 @@ def layout(title: str, body: str) -> bytes:
     .modal-content {{ max-width: 94vw; max-height: 90vh; }}
     .modal-content img, .modal-content video {{ max-width: 94vw; max-height: 90vh; border-radius: 8px; background: #000; }}
     .modal-close {{ position: fixed; top: 16px; right: 18px; font-size: 28px; background: white; color: #172033; border-radius: 999px; width: 44px; height: 44px; }}
+    @media (max-width: 820px) {{
+      .shell {{ grid-template-columns: 1fr; }}
+      aside {{ position: static; }}
+      nav {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      header {{ align-items: flex-start; flex-direction: column; }}
+      main {{ padding: 14px; overflow-x: auto; }}
+    }}
   </style>
 </head>
 <body>
-  <header><h2>Visa eSIM Bot Admin</h2></header>
-  <nav>
-    <a href="/">{esc(admin_t("dashboard"))}</a>
-    <a href="/orders">{esc(admin_t("orders"))}</a>
-    <a href="/reminders">{esc(admin_t("visa_reminders"))}</a>
-    <a href="/users">{esc(admin_t("users"))}</a>
-    <a href="/support">{esc(admin_t("support"))}</a>
-    <a href="/broadcast">{esc(admin_t("broadcast"))}</a>
-    <a href="/packages">{esc(admin_t("packages"))}</a>
-    <a href="/settings">{esc(admin_t("settings"))}</a>
-    <a href="/export">{esc(admin_t("export"))}</a>
-    <a href="/logout">{esc(admin_t("logout"))}</a>
-    <a href="/set-lang?lang=uz">UZ</a>
-    <a href="/set-lang?lang=ru">RU</a>
-    <a href="/set-lang?lang=en">EN</a>
-  </nav>
-  <main>{body}</main>
+  <div class="shell">
+    <aside>
+      <div class="brand">
+        <div class="brand-mark">VE</div>
+        <div>
+          <div class="brand-title">Visa eSIM</div>
+          <div class="brand-sub">Admin Panel</div>
+        </div>
+      </div>
+      <nav>
+        {nav_html}
+      </nav>
+      <div class="sidebar-foot">
+        <a href="/logout">{esc(admin_t("logout"))}</a>
+      </div>
+    </aside>
+    <div class="content">
+      <header>
+        <h2>{esc(title)}</h2>
+        <div class="langbar">
+          <a href="/set-lang?lang=uz">UZ</a>
+          <a href="/set-lang?lang=ru">RU</a>
+          <a href="/set-lang?lang=en">EN</a>
+        </div>
+      </header>
+      <main>{body}</main>
+    </div>
+  </div>
 </body>
 </html>"""
     return page.encode("utf-8")
