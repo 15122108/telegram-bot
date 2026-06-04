@@ -26,6 +26,13 @@ $edgePaths = @(
     "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
     "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
 )
+$pythonPaths = @(
+    "$workspace\.venv\Scripts\python.exe",
+    "C:\Users\acer\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe",
+    "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+    "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+    "python.exe"
+)
 
 function Test-Panel {
     try {
@@ -36,10 +43,31 @@ function Test-Panel {
     }
 }
 
-if ($usesLocalTunnel -and -not (Test-Panel)) {
+function Start-LocalPanel {
+    $python = $pythonPaths | Where-Object {
+        if ($_ -eq "python.exe") { return $true }
+        Test-Path -LiteralPath $_
+    } | Select-Object -First 1
+
+    if (-not $python) {
+        return
+    }
+
     Start-Process -WindowStyle Hidden `
-        -FilePath "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" `
-        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $tunnelScript)
+        -FilePath $python `
+        -ArgumentList @("admin_panel.py") `
+        -WorkingDirectory $workspace
+}
+
+if ($usesLocalTunnel -and -not (Test-Panel)) {
+    Start-LocalPanel
+    Start-Sleep -Seconds 2
+
+    if (-not (Test-Panel)) {
+        Start-Process -WindowStyle Hidden `
+            -FilePath "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" `
+            -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $tunnelScript)
+    }
 }
 
 for ($i = 0; $i -lt 20; $i++) {
