@@ -679,7 +679,7 @@ async function pollDashboardUsers() {{
   }} catch (error) {{}}
 }}
 pollDashboardUsers();
-setInterval(pollDashboardUsers, 3000);
+setInterval(pollDashboardUsers, 1000);
 </script>
 """
     return layout(admin_t("dashboard"), body)
@@ -845,7 +845,7 @@ async function pollUsers() {{
 }}
 
 pollUsers();
-setInterval(pollUsers, 3000);
+setInterval(pollUsers, 1000);
 </script>
 """
     return layout(admin_t("users"), body)

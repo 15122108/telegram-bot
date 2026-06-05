@@ -687,8 +687,24 @@ def main_menu(lang: str = DEFAULT_LANG) -> dict:
     }
 
 
-def esim_country_menu(lang: str = DEFAULT_LANG) -> dict:
-    buttons = [(package["country"][:45], f"esim:{code}") for code, package in list(esim_packages().items())[:80]]
+ESIM_COUNTRIES_PER_PAGE = 40
+
+
+def esim_country_menu(lang: str = DEFAULT_LANG, page: int = 0) -> dict:
+    packages = list(esim_packages().items())
+    total = len(packages)
+    max_page = max((total - 1) // ESIM_COUNTRIES_PER_PAGE, 0)
+    page = min(max(page, 0), max_page)
+    start = page * ESIM_COUNTRIES_PER_PAGE
+    end = start + ESIM_COUNTRIES_PER_PAGE
+
+    buttons = [(package["country"][:45], f"esim:{code}") for code, package in packages[start:end]]
+    nav = []
+    if page > 0:
+        nav.append(("⬅️ Oldingi", f"esim_page:{page - 1}"))
+    if end < total:
+        nav.append(("Keyingi ➡️", f"esim_page:{page + 1}"))
+    buttons.extend(nav)
     return inline_menu(buttons, back=True, lang=lang)
 
 
@@ -1778,6 +1794,13 @@ def build_callback_reply(token: str, callback_query: dict) -> tuple[str, dict | 
 
     if data == "menu:esim":
         return t(lang, "select_esim_country"), esim_country_menu(lang)
+
+    if data.startswith("esim_page:"):
+        try:
+            page = int(data.split(":", 1)[1])
+        except (TypeError, ValueError):
+            page = 0
+        return t(lang, "select_esim_country"), esim_country_menu(lang, page)
 
     if data.startswith("esim:"):
         country = data.split(":", 1)[1]

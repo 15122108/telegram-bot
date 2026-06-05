@@ -11,6 +11,7 @@ esimgo_catalogue_cache.json
 bot.log
 bot.err.log
 bot.pid
+bot-local.pid
 *.log
 payment_qr.jpg
 payment_qr.png
