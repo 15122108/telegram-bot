@@ -10,11 +10,12 @@ Telegram bot for selling travel eSIM packages and handling visa expiry reminders
 - Configurable markup with `ESIM_MARKUP_PERCENT`
 - Manual payment verification flow
 - Admin command to create a real eSIM after payment: `/fulfill ORDER_ID`
-- Admin panel with users, orders, support, broadcast, packages, settings, and exports
+- Admin panel with users, orders, profit KPIs, support, broadcast, packages, settings, and exports
 - Support inbox with text/photo/video/document attachments
 - Broadcast text/photo/video messages
 - User tracking after `/start` or any bot interaction
 - Visa expiry reminder flow
+- Buyer-ready $5000 sales package: [SALES_OFFER_5000.md](SALES_OFFER_5000.md)
 
 ## Required Environment Variables
 

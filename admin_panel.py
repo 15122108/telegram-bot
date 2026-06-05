@@ -136,6 +136,15 @@ ADMIN_TEXT = {
         "new_user": "Yangi foydalanuvchi",
         "new_user_body": "Botga yangi foydalanuvchi qo'shildi",
         "users_state": "Foydalanuvchilar holati",
+        "paid_revenue": "To'langan tushum",
+        "cost": "Tan narx",
+        "profit": "Sof foyda",
+        "margin": "Marja",
+        "avg_order": "O'rtacha chek",
+        "conversion": "Konversiya",
+        "provider": "Provider",
+        "business_metrics": "Biznes ko'rsatkichlar",
+        "business_metrics_hint": "Bu blok xaridorga tizim faqat bot emas, eSIM savdo CRM ekanini ko'rsatadi: tushum, tan narx, foyda, marja va konversiya bitta panelda.",
     },
     "ru": {
         "dashboard": "Панель",
@@ -364,8 +373,141 @@ ADMIN_TEXT = {
         "new_user": "New user",
         "new_user_body": "A new user joined the bot",
         "users_state": "Users status",
+        "paid_revenue": "Paid revenue",
+        "cost": "Cost",
+        "profit": "Net profit",
+        "margin": "Margin",
+        "avg_order": "Average order",
+        "conversion": "Conversion",
+        "provider": "Provider",
+        "business_metrics": "Business metrics",
+        "business_metrics_hint": "This block shows buyers that the product is not just a bot, but an eSIM sales CRM with revenue, cost, profit, margin, and conversion in one panel.",
     },
 }
+ADMIN_TEXT["ru"] = {
+    "dashboard": "Панель",
+    "orders": "Заказы",
+    "visa_reminders": "Срок визы",
+    "users": "Пользователи",
+    "support": "Поддержка",
+    "packages": "eSIM пакеты",
+    "settings": "Настройки",
+    "export": "Экспорт",
+    "broadcast": "Рассылка",
+    "logout": "Выйти",
+    "login_title": "Visa eSIM Admin",
+    "login_hint": "Введите пароль для входа в панель.",
+    "password": "Пароль",
+    "login": "Войти",
+    "wrong_password": "Неверный пароль или пароль не настроен.",
+    "panel_private": "Админ-панель защищена. Даже по публичной ссылке она не откроется без пароля.",
+    "pending": "Ожидают",
+    "order_sum": "Сумма заказов",
+    "open_support": "Открытые обращения",
+    "change_password": "Сменить пароль админ-панели",
+    "old_password": "Старый пароль",
+    "new_password": "Новый пароль",
+    "repeat_password": "Повторите новый пароль",
+    "save": "Сохранить",
+    "change_password_btn": "Сменить пароль",
+    "bot_payment_settings": "Настройки бота, оплаты и eSIM",
+    "settings_saved": "Настройки сохранены.",
+    "packages_title": "eSIM пакеты",
+    "add_update_country": "Добавить или обновить страну",
+    "code": "Код",
+    "country_name": "Название страны",
+    "download": "скачать",
+    "id": "ID",
+    "country": "Страна",
+    "plan": "Пакет",
+    "price": "Цена",
+    "status": "Статус",
+    "user": "Пользователь",
+    "action": "Действие",
+    "done": "Готово",
+    "cancel": "Отменить",
+    "delete": "Удалить",
+    "created": "Создано",
+    "sent": "Отправлено",
+    "username": "Username",
+    "name": "Имя",
+    "language": "Язык",
+    "last_activity": "Последняя активность",
+    "sum": "Сумма",
+    "send_via_bot": "Отправить через бота",
+    "reply_placeholder": "Напишите ответ клиенту...",
+    "send": "Отправить",
+    "telegram_reply_hint": "Или через Telegram",
+    "support_questions": "Вопросы поддержки",
+    "question": "Вопрос",
+    "file": "Файл",
+    "answer": "Ответ",
+    "no_file": "Файла нет",
+    "open_download": "Открыть/скачать",
+    "select_support": "Выберите обращение.",
+    "client": "Клиент",
+    "reply_write": "Напишите ответ...",
+    "send_reply": "Отправить ответ",
+    "support_state": "Статус поддержки",
+    "open_messages_suffix": "открытых сообщений.",
+    "enable_notifications": "Включить уведомления",
+    "notify_unsupported": "Этот браузер не поддерживает уведомления.",
+    "notify_enabled": "Включено.",
+    "notify_denied": "Разрешение не выдано.",
+    "new_support": "Новое обращение",
+    "new_support_body": "Клиент отправил новое сообщение",
+    "password_changed_hint": "После смены пароля нужно войти заново.",
+    "payment_settings_hint": "Настройки оплаты и eSIM Go сохраняются в .env. Бот прочитает их при следующих запросах.",
+    "card_holder": "Владелец карты",
+    "card_number": "Номер карты",
+    "qr_image_file": "Файл QR изображения",
+    "qr_link": "QR ссылка",
+    "payment_note": "Примечание к оплате",
+    "card_payment_link": "Visa/Mastercard payment link",
+    "payme_link": "Payme ссылка",
+    "click_link": "Click ссылка",
+    "esimgo_api_key": "eSIM Go API Key",
+    "esim_markup_percent": "Наценка eSIM, %",
+    "package_hint": "Введите до 3 пакетов. Пустые пакеты не сохраняются.",
+    "package_1": "Пакет 1",
+    "package_2": "Пакет 2",
+    "package_3": "Пакет 3",
+    "package_saved": "Пакет сохранен.",
+    "package_need_code": "Нужны код и название страны.",
+    "package_incomplete": "В каждом пакете должны быть data, дни и цена.",
+    "price_number": "Цена должна быть числом.",
+    "package_need_one": "Добавьте хотя бы один пакет.",
+    "old_password_wrong": "Старый пароль неверный.",
+    "new_password_short": "Новый пароль должен быть минимум 8 символов.",
+    "new_password_mismatch": "Новые пароли не совпадают.",
+    "password_changed": "Пароль изменен.",
+    "broadcast_title": "Массовая рассылка",
+    "broadcast_hint": "Отправляется пользователям, которые нажали /start и не заблокировали бота. Если профиль закрыт, сообщение все равно уйдет при наличии chat ID.",
+    "broadcast_text": "Текст сообщения",
+    "broadcast_media": "Фото/видео",
+    "broadcast_media_hint": "Необязательно: выберите фото или видео. Текст будет отправлен как caption.",
+    "broadcast_content_required": "Введите текст или выберите фото/видео.",
+    "target_lang": "По языку",
+    "all_users": "Все пользователи",
+    "send_broadcast": "Отправить всем",
+    "broadcast_done": "Отправлено: {sent}. Ошибок/блокировок: {failed}.",
+    "esim_countries": "eSIM страны",
+    "no_users_hint": "Пока нет пользователей. Люди появятся здесь после /start в боте.",
+    "esimgo_api_base": "eSIM Go API адрес",
+    "new_user": "Новый пользователь",
+    "new_user_body": "В боте появился новый пользователь",
+    "users_state": "Статус пользователей",
+    "paid_revenue": "Оплаченная выручка",
+    "cost": "Себестоимость",
+    "profit": "Чистая прибыль",
+    "margin": "Маржа",
+    "avg_order": "Средний чек",
+    "conversion": "Конверсия",
+    "provider": "Провайдер",
+    "business_metrics": "Бизнес-показатели",
+    "business_metrics_hint": "Этот блок показывает покупателю, что продукт не просто бот, а CRM для продаж eSIM с выручкой, себестоимостью, прибылью, маржой и конверсией в одной панели.",
+}
+
 DEFAULT_PACKAGES = {
     "uae": {"country": "United Arab Emirates / Dubai", "plans": [{"data": "1GB", "days": "7 kun", "price_usd": 5}, {"data": "3GB", "days": "15 kun", "price_usd": 11}, {"data": "5GB", "days": "30 kun", "price_usd": 16}]},
     "turkiye": {"country": "Turkiye", "plans": [{"data": "1GB", "days": "7 kun", "price_usd": 4}, {"data": "3GB", "days": "15 kun", "price_usd": 9}, {"data": "5GB", "days": "30 kun", "price_usd": 14}]},
@@ -589,6 +731,9 @@ def layout(title: str, body: str) -> bytes:
     th {{ background: #eef4ff; }}
     .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }}
     .card {{ background: white; border: 1px solid #dde3ee; border-radius: 8px; padding: 14px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }}
+    .panel-section {{ background: white; border: 1px solid #dde3ee; border-radius: 8px; padding: 16px; margin: 0 0 18px; }}
+    .profit {{ color: #067647; font-weight: 700; }}
+    .loss {{ color: #b42318; font-weight: 700; }}
     .num {{ font-size: 28px; font-weight: 700; }}
     form {{ display: inline; }}
     textarea {{ width: 100%; min-height: 110px; padding: 10px; border: 1px solid #cdd8ea; border-radius: 6px; resize: vertical; box-sizing: border-box; }}
@@ -654,20 +799,42 @@ def dashboard():
     reminders = read_json("reminders.json", [])
     users = collect_users()
     support_messages = read_json("support_messages.json", [])
-    pending = sum(1 for order in orders if order.get("status") == "pending_payment")
+    active_orders = [order for order in orders if order.get("status") != "cancelled"]
+    paid_orders = [
+        order
+        for order in orders
+        if order.get("status") in {"completed", "fulfilled", "done"}
+    ]
+    pending = sum(1 for order in active_orders if order.get("status") == "pending_payment")
     open_support = sum(1 for item in support_messages if item.get("status") != "replied")
-    revenue = sum(float(order.get("price_usd", 0)) for order in orders)
+    revenue = sum(float(order.get("price_usd", 0) or 0) for order in active_orders)
+    paid_revenue = sum(float(order.get("price_usd", 0) or 0) for order in paid_orders)
+    cost = sum(float(order.get("cost_usd", order.get("price_usd", 0)) or 0) for order in active_orders)
+    profit = sum(float(order.get("profit_usd", 0) or 0) for order in active_orders)
+    margin = (profit / revenue * 100) if revenue else 0
+    avg_order = (revenue / len(active_orders)) if active_orders else 0
+    conversion = (len(active_orders) / len(users) * 100) if users else 0
     esim_count = esim_country_count()
     body = f"""
 <div class="cards">
   <div class="card"><div class="muted">{esc(admin_t("orders"))}</div><div class="num">{len(orders)}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("pending"))}</div><div class="num">{pending}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("order_sum"))}</div><div class="num">${revenue:.2f}</div></div>
+  <div class="card"><div class="muted">{esc(admin_t("paid_revenue"))}</div><div class="num">${paid_revenue:.2f}</div></div>
+  <div class="card"><div class="muted">{esc(admin_t("cost"))}</div><div class="num">${cost:.2f}</div></div>
+  <div class="card"><div class="muted">{esc(admin_t("profit"))}</div><div class="num">${profit:.2f}</div></div>
+  <div class="card"><div class="muted">{esc(admin_t("margin"))}</div><div class="num">{margin:.1f}%</div></div>
+  <div class="card"><div class="muted">{esc(admin_t("avg_order"))}</div><div class="num">${avg_order:.2f}</div></div>
+  <div class="card"><div class="muted">{esc(admin_t("conversion"))}</div><div class="num">{conversion:.1f}%</div></div>
   <div class="card"><div class="muted">{esc(admin_t("esim_countries"))}</div><div class="num">{esim_count}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("visa_reminders"))}</div><div class="num">{len(reminders)}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("users"))}</div><div class="num" id="dashboard-users-count">{len(users)}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("open_support"))}</div><div class="num">{open_support}</div></div>
 </div>
+<section class="panel-section">
+  <h3>{esc(admin_t("business_metrics"))}</h3>
+  <p class="muted">{esc(admin_t("business_metrics_hint"))}</p>
+</section>
 <p class="muted">{esc(admin_t("panel_private"))}</p>
 <script>
 async function pollDashboardUsers() {{
@@ -696,15 +863,31 @@ def esim_country_count() -> int:
 def orders_page():
     rows = []
     for order in reversed(read_json("orders.json", [])):
+        price = float(order.get("price_usd", 0) or 0)
+        cost = float(order.get("cost_usd", price) or 0)
+        profit = float(order.get("profit_usd", price - cost) or 0)
+        profit_class = "profit" if profit >= 0 else "loss"
+        provider = order.get("provider") or "manual"
+        bundle = order.get("bundle_name") or ""
         rows.append(
             f"<tr><td>{esc(order.get('id'))}</td><td>{esc(order.get('country'))}</td>"
             f"<td>{esc(order.get('data'))}, {esc(order.get('days'))}</td>"
-            f"<td>${esc(order.get('price_usd'))}</td><td>{esc(order.get('status'))}</td>"
+            f"<td>${price:.2f}</td><td>${cost:.2f}</td><td class='{profit_class}'>${profit:.2f}</td>"
+            f"<td>{esc(provider)}<br><span class='muted'>{esc(bundle)}</span></td>"
+            f"<td>{esc(order.get('status'))}</td>"
             f"<td>{esc(order.get('username') or order.get('user_id'))}</td>"
             f"<td><form method='post' action='/order-status'><input type='hidden' name='id' value='{esc(order.get('id'))}'><input type='hidden' name='status' value='completed'><button>{esc(admin_t('done'))}</button></form> "
             f"<form method='post' action='/order-status'><input type='hidden' name='id' value='{esc(order.get('id'))}'><input type='hidden' name='status' value='cancelled'><button class='danger'>{esc(admin_t('cancel'))}</button></form></td></tr>"
         )
-    body = f"<h3>{esc(admin_t('orders'))}</h3><table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('country'))}</th><th>{esc(admin_t('plan'))}</th><th>{esc(admin_t('price'))}</th><th>{esc(admin_t('status'))}</th><th>{esc(admin_t('user'))}</th><th>{esc(admin_t('action'))}</th></tr>" + "".join(rows) + "</table>"
+    body = (
+        f"<h3>{esc(admin_t('orders'))}</h3>"
+        f"<table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('country'))}</th>"
+        f"<th>{esc(admin_t('plan'))}</th><th>{esc(admin_t('price'))}</th><th>{esc(admin_t('cost'))}</th>"
+        f"<th>{esc(admin_t('profit'))}</th><th>{esc(admin_t('provider'))}</th><th>{esc(admin_t('status'))}</th>"
+        f"<th>{esc(admin_t('user'))}</th><th>{esc(admin_t('action'))}</th></tr>"
+        + "".join(rows)
+        + "</table>"
+    )
     return layout(admin_t("orders"), body)
 
 
@@ -882,9 +1065,14 @@ def user_detail_page(user_id: str):
 
     order_rows = []
     for order in reversed(orders):
+        price = float(order.get("price_usd", 0) or 0)
+        cost = float(order.get("cost_usd", price) or 0)
+        profit = float(order.get("profit_usd", price - cost) or 0)
+        profit_class = "profit" if profit >= 0 else "loss"
         order_rows.append(
             f"<tr><td>{esc(order.get('id'))}</td><td>{esc(order.get('country'))}</td>"
-            f"<td>{esc(order.get('data'))}</td><td>${esc(order.get('price_usd'))}</td>"
+            f"<td>{esc(order.get('data'))}, {esc(order.get('days'))}</td>"
+            f"<td>${price:.2f}</td><td>${cost:.2f}</td><td class='{profit_class}'>${profit:.2f}</td>"
             f"<td>{esc(order.get('status'))}</td><td>{esc(order.get('created_at'))}</td>"
             f"<td><form method='post' action='/order-status'><input type='hidden' name='id' value='{esc(order.get('id'))}'><input type='hidden' name='status' value='completed'><input type='hidden' name='back' value='/user?id={esc(user_id)}'><button>{esc(admin_t('done'))}</button></form> "
             f"<form method='post' action='/order-status'><input type='hidden' name='id' value='{esc(order.get('id'))}'><input type='hidden' name='status' value='cancelled'><input type='hidden' name='back' value='/user?id={esc(user_id)}'><button class='danger'>{esc(admin_t('cancel'))}</button></form></td></tr>"
@@ -925,7 +1113,7 @@ def user_detail_page(user_id: str):
   <p class="muted">{esc(admin_t('telegram_reply_hint'))}: /reply {esc(user_id)} javob matni</p>
 </div>
 <h4>{esc(admin_t('orders'))}</h4>
-<table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('country'))}</th><th>{esc(admin_t('plan'))}</th><th>{esc(admin_t('price'))}</th><th>{esc(admin_t('status'))}</th><th>{esc(admin_t('created'))}</th><th>{esc(admin_t('action'))}</th></tr>{''.join(order_rows)}</table>
+<table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('country'))}</th><th>{esc(admin_t('plan'))}</th><th>{esc(admin_t('price'))}</th><th>{esc(admin_t('cost'))}</th><th>{esc(admin_t('profit'))}</th><th>{esc(admin_t('status'))}</th><th>{esc(admin_t('created'))}</th><th>{esc(admin_t('action'))}</th></tr>{''.join(order_rows)}</table>
 <h4>{esc(admin_t('visa_reminders'))}</h4>
 <table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('visa_reminders'))}</th><th>{esc(admin_t('sent'))}</th><th>{esc(admin_t('created'))}</th></tr>{''.join(reminder_rows)}</table>
 <h4>{esc(admin_t('support_questions'))}</h4>
