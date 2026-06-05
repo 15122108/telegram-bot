@@ -167,6 +167,7 @@ DEFAULT_ESIM_PACKAGES = {
 
 
 def esim_packages() -> dict:
+    manual_fallback = os.environ.get("ALLOW_MANUAL_ESIM_FALLBACK", "0").strip() == "1"
     if esimgo_enabled():
         try:
             packages = esimgo_catalogue()
@@ -174,9 +175,14 @@ def esim_packages() -> dict:
                 return packages
         except Exception as exc:
             print(f"eSIM Go catalogue error: {exc}")
+            if not manual_fallback:
+                return {}
+    elif not manual_fallback:
+        return {}
+
     packages = read_json_file(PACKAGES_FILE, None)
     if not isinstance(packages, dict) or not packages:
-        return DEFAULT_ESIM_PACKAGES
+        return DEFAULT_ESIM_PACKAGES if manual_fallback else {}
     cleaned = {}
     for code, package in packages.items():
         if not isinstance(package, dict):
@@ -203,7 +209,7 @@ def esim_packages() -> dict:
             valid_plans.append((data, days, price))
         if country and valid_plans:
             cleaned[normalize_query(str(code))] = {"country": country, "plans": valid_plans}
-    return cleaned or DEFAULT_ESIM_PACKAGES
+    return cleaned or (DEFAULT_ESIM_PACKAGES if manual_fallback else {})
 
 
 def load_env_file(path: Path) -> None:

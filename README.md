@@ -28,9 +28,12 @@ ADMIN_PANEL_SECRET=
 ESIMGO_API_KEY=
 ESIMGO_API_BASE=https://api.esim-go.com/v2.4
 ESIM_MARKUP_PERCENT=30
+ALLOW_MANUAL_ESIM_FALLBACK=0
 CARD_QR_IMAGE=payment_qr.png
 CARD_PAYMENT_NOTE=
 ```
+
+`ALLOW_MANUAL_ESIM_FALLBACK=0` is real mode. The bot only uses eSIM Go catalogue/products and will not sell local demo packages if the provider API is unavailable.
 
 ## Order Flow
 
