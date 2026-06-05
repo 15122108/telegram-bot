@@ -1,76 +1,65 @@
-# Telegram Bot
+# Visa eSIM Uzbekistan Bot
 
-Oddiy Telegram bot starter loyihasi. Tashqi Python paketlari kerak emas.
+Telegram bot for selling travel eSIM packages and handling visa expiry reminders.
 
-## Token olish
+## Features
 
-1. Telegramda `@BotFather` ni oching.
-2. `/newbot` yuboring va bot nomini tanlang.
-3. BotFather bergan tokenni nusxalang.
+- Telegram menu with Uzbek, Russian, and English language support
+- eSIM Go catalogue integration
+- 211+ eSIM destinations from the provider catalogue
+- Configurable markup with `ESIM_MARKUP_PERCENT`
+- Manual payment verification flow
+- Admin command to create a real eSIM after payment: `/fulfill ORDER_ID`
+- Admin panel with users, orders, support, broadcast, packages, settings, and exports
+- Support inbox with text/photo/video/document attachments
+- Broadcast text/photo/video messages
+- User tracking after `/start` or any bot interaction
+- Visa expiry reminder flow
 
-## Ishga tushirish
+## Required Environment Variables
 
-PowerShell:
+```env
+TELEGRAM_BOT_TOKEN=
+ADMIN_CHAT_ID=
+ADMIN_USERNAME=
+ADMIN_PANEL_PASSWORD=
+ADMIN_PANEL_SECRET=
+ESIMGO_API_KEY=
+ESIMGO_API_BASE=https://api.esim-go.com/v2.4
+ESIM_MARKUP_PERCENT=30
+CARD_QR_IMAGE=payment_qr.png
+CARD_PAYMENT_NOTE=
+```
+
+## Order Flow
+
+1. Customer selects an eSIM country and package.
+2. Bot creates an order and sends payment instructions.
+3. Customer sends the payment receipt.
+4. Admin checks the payment.
+5. Admin runs:
+
+```text
+/fulfill VE-YYYYMMDD-0001
+```
+
+The bot creates a real eSIM through eSIM Go and sends installation details to the customer.
+
+## Local Run
 
 ```powershell
 cd "C:\Users\acer\Documents\New project\telegram-bot"
-Copy-Item .env.example .env
-notepad .env
 .\run.bat
 ```
 
-Fon rejimida ishga tushirish:
+Admin panel shortcut:
 
-```powershell
-.\start-hidden.bat
+```text
+Visa eSIM Admin Panel
 ```
 
-Botni to'xtatish:
+## 24/7 Deployment
 
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\stop-bot.ps1
-```
+Use a VPS or a cloud service that can run a persistent Python process. See [DEPLOY.md](DEPLOY.md).
 
-Watchdog tekshiruvi:
-
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\watchdog.ps1
-```
-
-Windows Task Scheduler orqali har 5 daqiqada watchdog ishga tushirish:
-
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\create-watchdog-task.ps1
-```
-
-`.env` ichidagi `TELEGRAM_BOT_TOKEN` qiymatini haqiqiy token bilan almashtiring.
-
-Admin va Wallet sozlamalari:
-
-```env
-ADMIN_CHAT_ID=123456789
-TELEGRAM_WALLET_PAY_LINK=https://t.me/wallet
-TELEGRAM_WALLET_ADDRESS=USDT_TRON_ADDRESS_YOKI_WALLET_MANZIL
-```
-
-`ADMIN_CHAT_ID` qo'yilsa, yangi eSIM buyurtmalar admin chatga yuboriladi.
-
-## Buyruqlar
-
-- `/start` - botni boshlash
-- `/help` - yordam
-- `/visa_list` - O'zbekiston fuqarolari uchun vizasiz davlatlar
-- `/visa UAE` - bitta davlat bo'yicha viza holatini tekshiradi
-- `/esim` - mavjud eSIM yo'nalishlari
-- `/esim uae` - davlat bo'yicha paketlar
-- `/buy uae 1GB` - eSIM buyurtma va to'lov yo'riqnomasi
-
-## Muhim
-
-Bu bot hozir manual sotuv oqimida ishlaydi: mijoz buyurtma qiladi, Telegram Wallet orqali to'laydi, chek yuboradi, admin tasdiqlaydi va eSIM QR/kodni beradi.
-
-To'lovni avtomatik qabul qilish va pulni to'g'ridan-to'g'ri Telegram Wallet merchant hisobiga yig'ish uchun Wallet Pay merchant akkaunti va API integratsiyasi kerak. eSIMni avtomatik yetkazish uchun esa Airalo, Nomad, Dent, RedteaGO yoki boshqa eSIM provayderining reseller/API hisobini ulash kerak.
-
-## 24/7 ishlash
-
-Lokal kompyuterda bot faqat kompyuter yoqiq va internet bor paytda 24/7 ishlaydi. Haqiqiy 24/7 uchun botni VPS/cloud serverga joylash kerak.
+Secrets must be stored in environment variables. Do not commit `.env`.

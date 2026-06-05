@@ -1460,7 +1460,7 @@ def faq_text(lang: str = DEFAULT_LANG) -> str:
             "How to install?\n"
             "Settings -> Mobile/Cellular -> Add eSIM, then scan the QR.\n\n"
             "What happens after payment?\n"
-            "The receipt is checked, then QR/code is sent. After Airalo API this will be automatic."
+            "The receipt is checked, then the admin creates a real eSIM through eSIM Go and the bot sends the install details."
         )
     return (
         "FAQ:\n\n"
@@ -1473,7 +1473,7 @@ def faq_text(lang: str = DEFAULT_LANG) -> str:
         "Qanday o'rnatiladi?\n"
         "Telefon sozlamalarida Add eSIM / Add Mobile Plan bo'limidan QR code skaner qilinadi.\n\n"
         "To'lovdan keyin nima bo'ladi?\n"
-        "Chek tekshiriladi va eSIM QR/kod yuboriladi. Airalo API ulangach bu avtomatik bo'ladi."
+        "Chek tekshiriladi, admin eSIM Go orqali real eSIM yaratadi va bot o'rnatish ma'lumotlarini yuboradi."
     )
 
 
