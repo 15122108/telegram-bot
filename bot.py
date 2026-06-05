@@ -1154,13 +1154,8 @@ def build_order_response(
 
 
 def extract_order_id(text: str) -> str | None:
-    marker = "#"
-    if marker not in text:
-        return None
-    order_id = text.split(marker, 1)[1].split()[0].strip()
-    if not order_id.startswith("VE-"):
-        return None
-    return order_id
+    match = re.search(r"\bVE-\d{8}-\d{4}\b", text or "")
+    return match.group(0) if match else None
 
 
 def format_stats() -> str:
@@ -1833,13 +1828,9 @@ def build_callback_reply(token: str, callback_query: dict) -> tuple[str, dict | 
 def maybe_send_payment_qr(token: str, chat_id: int, order_id: str, lang: str) -> None:
     load_env_file(Path(__file__).with_name(".env"))
     qr_image = os.environ.get("CARD_QR_IMAGE", "").strip()
-    if not qr_image:
-        return
-
-    qr_path = DATA_DIR / qr_image
-    if not qr_path.exists():
-        qr_path = BASE_DIR / qr_image
-    if not qr_path.exists():
+    qr_link = os.environ.get("CARD_QR_LINK", "").strip()
+    if not qr_image and not qr_link:
+        print("QR yuborilmadi: CARD_QR_IMAGE va CARD_QR_LINK bo'sh")
         return
 
     captions = {
@@ -1847,7 +1838,22 @@ def maybe_send_payment_qr(token: str, chat_id: int, order_id: str, lang: str) ->
         "ru": f"QR для оплаты заказа #{order_id}. После оплаты отправьте скриншот чека в этот чат.",
         "en": f"QR payment for order #{order_id}. After payment, send the receipt screenshot to this chat.",
     }
-    send_photo(token, chat_id, qr_path, captions.get(lang, captions[DEFAULT_LANG]))
+    caption = captions.get(lang, captions[DEFAULT_LANG])
+
+    if qr_image:
+        qr_path = DATA_DIR / qr_image
+        if not qr_path.exists():
+            qr_path = BASE_DIR / qr_image
+        if qr_path.exists():
+            send_photo(token, chat_id, qr_path, caption)
+            return
+        print(f"QR rasm topilmadi: {qr_image}")
+
+    if qr_link:
+        send_message(token, chat_id, f"{caption}\n\n{qr_link}")
+        return
+
+    print("QR yuborilmadi: rasm topilmadi va CARD_QR_LINK bo'sh")
 
 
 def handle_update(token: str, update: dict) -> None:
