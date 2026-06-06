@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("DATA_DIR") or os.environ.get("RAILWAY_VOLUME_MOUNT_PATH") or str(BASE_DIR))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+ASSETS_DIR = BASE_DIR / "assets"
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8088"))
 SESSION_COOKIE = "admin_session"
@@ -709,6 +710,8 @@ def login_page(error: str = "") -> bytes:
   <style>
     body {{ margin: 0; font-family: Arial, sans-serif; background: #f5f7fb; color: #172033; display: grid; min-height: 100vh; place-items: center; }}
     .box {{ width: min(420px, calc(100vw - 32px)); background: white; border: 1px solid #dde3ee; border-radius: 8px; padding: 22px; }}
+    .login-logo {{ width: 96px; height: 96px; object-fit: cover; border-radius: 22px; display: block; margin: 0 auto 14px; box-shadow: 0 12px 30px rgba(18, 61, 118, .22); }}
+    h2 {{ text-align: center; margin: 4px 0 10px; }}
     input {{ width: 100%; padding: 12px; border: 1px solid #cdd8ea; border-radius: 6px; box-sizing: border-box; }}
     button {{ width: 100%; margin-top: 12px; border: 0; border-radius: 6px; padding: 11px; background: #123d76; color: white; cursor: pointer; }}
     .muted {{ color: #667085; }}
@@ -717,6 +720,7 @@ def login_page(error: str = "") -> bytes:
 </head>
 <body>
   <form class="box" method="post" action="/login">
+    <img class="login-logo" src="/assets/visa-esim-logo.png" alt="Visa eSIM">
     <h2>{esc(admin_t("login_title"))}</h2>
     <p class="muted">UZ · <a href="/set-lang?lang=ru">RU</a> · <a href="/set-lang?lang=en">EN</a></p>
     <p class="muted">{esc(admin_t("login_hint"))}</p>
@@ -755,7 +759,7 @@ def layout(title: str, body: str) -> bytes:
     .shell {{ display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }}
     aside {{ background: #0f2f5f; color: white; padding: 18px 14px; }}
     .brand {{ display: flex; align-items: center; gap: 10px; padding: 8px 10px 18px; border-bottom: 1px solid rgba(255,255,255,.18); margin-bottom: 14px; }}
-    .brand-mark {{ width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; background: #1f63b5; font-weight: 700; }}
+    .brand-mark {{ width: 42px; height: 42px; border-radius: 10px; display: block; object-fit: cover; box-shadow: 0 8px 20px rgba(0,0,0,.22); }}
     .brand-title {{ font-weight: 700; line-height: 1.2; }}
     .brand-sub {{ color: #b9c8dc; font-size: 12px; margin-top: 2px; }}
     nav {{ display: grid; gap: 6px; }}
@@ -818,7 +822,7 @@ def layout(title: str, body: str) -> bytes:
   <div class="shell">
     <aside>
       <div class="brand">
-        <div class="brand-mark">VE</div>
+        <img class="brand-mark" src="/assets/visa-esim-logo.png" alt="Visa eSIM">
         <div>
           <div class="brand-title">Visa eSIM</div>
           <div class="brand-sub">Admin Panel</div>
@@ -1975,10 +1979,38 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
+    def send_asset(self, path: str) -> None:
+        name = path.removeprefix("/assets/").replace("\\", "/")
+        if "/" in name or name.startswith("."):
+            self.send_response(404)
+            self.end_headers()
+            return
+        file_path = ASSETS_DIR / name
+        if not file_path.exists() or not file_path.is_file():
+            self.send_response(404)
+            self.end_headers()
+            return
+        content_types = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".ico": "image/x-icon",
+        }
+        data = file_path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_types.get(file_path.suffix.lower(), "application/octet-stream"))
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def do_GET(self):
         global CURRENT_ADMIN_LANG
         CURRENT_ADMIN_LANG = self.current_lang()
         path = urlparse(self.path).path
+        if path.startswith("/assets/"):
+            self.send_asset(path)
+            return
         if path == "/health":
             data = b"ok"
             self.send_response(200)

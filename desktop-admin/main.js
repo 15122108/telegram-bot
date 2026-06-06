@@ -4,6 +4,7 @@ const { app, BrowserWindow, Menu, shell } = require("electron");
 
 const rootDir = path.resolve(__dirname, "..");
 const urlFile = path.join(rootDir, "admin-panel-url.txt");
+const iconPath = path.join(rootDir, "assets", "visa-esim-logo.ico");
 
 function adminUrl() {
   let url = "http://127.0.0.1:8088";
@@ -27,6 +28,7 @@ function createWindow() {
     minWidth: 960,
     minHeight: 680,
     title: "Visa eSIM Admin Panel",
+    icon: iconPath,
     backgroundColor: "#f5f7fb",
     autoHideMenuBar: true,
     webPreferences: {
