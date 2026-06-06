@@ -225,7 +225,12 @@ def load_env_file(path: Path) -> None:
         os.environ[key.strip()] = value.strip().strip('"').strip("'")
 
 
-def telegram_request(token: str, method: str, payload: dict | None = None) -> dict:
+def telegram_request(
+    token: str,
+    method: str,
+    payload: dict | None = None,
+    timeout: int | None = None,
+) -> dict:
     data = None
     headers = {}
 
@@ -240,7 +245,16 @@ def telegram_request(token: str, method: str, payload: dict | None = None) -> di
         method="POST" if payload is not None else "GET",
     )
 
-    with urllib.request.urlopen(request, timeout=12) as response:
+    request_timeout = timeout
+    if request_timeout is None:
+        request_timeout = 12
+        if method == "getUpdates" and isinstance(payload, dict):
+            try:
+                request_timeout = int(payload.get("timeout", 30)) + 5
+            except (TypeError, ValueError):
+                request_timeout = 35
+
+    with urllib.request.urlopen(request, timeout=request_timeout) as response:
         body = response.read().decode("utf-8")
         result = json.loads(body)
 
@@ -1917,35 +1931,35 @@ def run_bot(token: str) -> None:
 
     while True:
         payload = {
-            "timeout": 30,
+            "timeout": 10,
             "allowed_updates": ["message", "edited_message", "callback_query"],
         }
         if offset is not None:
             payload["offset"] = offset
 
         try:
-            now = time.time()
-            if now - last_reminder_check > 3600:
-                process_polis_reminders(token)
-                last_reminder_check = now
-
             response = telegram_request(token, "getUpdates", payload)
             for update in response.get("result", []):
                 offset = update["update_id"] + 1
                 handle_update(token, update)
+
+            now = time.time()
+            if now - last_reminder_check > 3600:
+                process_polis_reminders(token)
+                last_reminder_check = now
         except urllib.error.HTTPError as exc:
             if exc.code == 409:
-                print("Telegram HTTP xatosi: 409 Conflict. Bot boshqa server yoki processda ham ishlayapti; bu instance 60 soniya kutadi.")
-                time.sleep(60)
+                print("Telegram HTTP xatosi: 409 Conflict. Bot boshqa server yoki processda ham ishlayapti; bu instance 30 soniya kutadi.")
+                time.sleep(30)
             else:
                 print(f"Telegram HTTP xatosi: {exc.code} {exc.reason}")
-                time.sleep(5)
+                time.sleep(2)
         except urllib.error.URLError as exc:
             print(f"Tarmoq xatosi: {exc.reason}")
-            time.sleep(5)
+            time.sleep(2)
         except Exception as exc:
             print(f"Kutilmagan xato: {exc}")
-            time.sleep(5)
+            time.sleep(2)
 
 
 def main() -> None:
