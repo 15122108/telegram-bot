@@ -1056,6 +1056,8 @@ def format_order_for_admin(order: dict) -> str:
 
 
 def notify_admin(token: str, order: dict) -> None:
+    if os.environ.get("ADMIN_TELEGRAM_NOTIFICATIONS", "0").strip() != "1":
+        return
     admin_chat_id = os.environ.get("ADMIN_CHAT_ID", "").strip()
     if not admin_chat_id:
         return
@@ -1064,6 +1066,8 @@ def notify_admin(token: str, order: dict) -> None:
 
 
 def notify_admin_support(token: str, message: dict) -> None:
+    if os.environ.get("ADMIN_TELEGRAM_NOTIFICATIONS", "0").strip() != "1":
+        return
     admin_chat_id = os.environ.get("ADMIN_CHAT_ID", "").strip()
     if not admin_chat_id:
         return

@@ -64,6 +64,7 @@ ADMIN_TEXT = {
         "user": "Foydalanuvchi",
         "action": "Amal",
         "done": "Bajarildi",
+        "fulfill": "eSIM yuborish",
         "cancel": "Bekor qilish",
         "delete": "O'chirish",
         "created": "Yaratilgan",
@@ -301,6 +302,7 @@ ADMIN_TEXT = {
         "user": "User",
         "action": "Action",
         "done": "Done",
+        "fulfill": "Send eSIM",
         "cancel": "Cancel",
         "delete": "Delete",
         "created": "Created",
@@ -425,6 +427,7 @@ ADMIN_TEXT["ru"] = {
     "user": "Пользователь",
     "action": "Действие",
     "done": "Готово",
+    "fulfill": "Отправить eSIM",
     "cancel": "Отменить",
     "delete": "Удалить",
     "created": "Создано",
@@ -876,7 +879,8 @@ def orders_page():
             f"<td>{esc(provider)}<br><span class='muted'>{esc(bundle)}</span></td>"
             f"<td>{esc(order.get('status'))}</td>"
             f"<td>{esc(order.get('username') or order.get('user_id'))}</td>"
-            f"<td><form method='post' action='/order-status'><input type='hidden' name='id' value='{esc(order.get('id'))}'><input type='hidden' name='status' value='completed'><button>{esc(admin_t('done'))}</button></form> "
+            f"<td><form method='post' action='/order-fulfill'><input type='hidden' name='id' value='{esc(order.get('id'))}'><button>{esc(admin_t('fulfill'))}</button></form> "
+            f"<form method='post' action='/order-status'><input type='hidden' name='id' value='{esc(order.get('id'))}'><input type='hidden' name='status' value='completed'><button>{esc(admin_t('done'))}</button></form> "
             f"<form method='post' action='/order-status'><input type='hidden' name='id' value='{esc(order.get('id'))}'><input type='hidden' name='status' value='cancelled'><button class='danger'>{esc(admin_t('cancel'))}</button></form></td></tr>"
         )
     body = (
@@ -1074,7 +1078,8 @@ def user_detail_page(user_id: str):
             f"<td>{esc(order.get('data'))}, {esc(order.get('days'))}</td>"
             f"<td>${price:.2f}</td><td>${cost:.2f}</td><td class='{profit_class}'>${profit:.2f}</td>"
             f"<td>{esc(order.get('status'))}</td><td>{esc(order.get('created_at'))}</td>"
-            f"<td><form method='post' action='/order-status'><input type='hidden' name='id' value='{esc(order.get('id'))}'><input type='hidden' name='status' value='completed'><input type='hidden' name='back' value='/user?id={esc(user_id)}'><button>{esc(admin_t('done'))}</button></form> "
+            f"<td><form method='post' action='/order-fulfill'><input type='hidden' name='id' value='{esc(order.get('id'))}'><input type='hidden' name='back' value='/user?id={esc(user_id)}'><button>{esc(admin_t('fulfill'))}</button></form> "
+            f"<form method='post' action='/order-status'><input type='hidden' name='id' value='{esc(order.get('id'))}'><input type='hidden' name='status' value='completed'><input type='hidden' name='back' value='/user?id={esc(user_id)}'><button>{esc(admin_t('done'))}</button></form> "
             f"<form method='post' action='/order-status'><input type='hidden' name='id' value='{esc(order.get('id'))}'><input type='hidden' name='status' value='cancelled'><input type='hidden' name='back' value='/user?id={esc(user_id)}'><button class='danger'>{esc(admin_t('cancel'))}</button></form></td></tr>"
         )
 
@@ -1308,6 +1313,7 @@ def settings_page(message: str = "", error: str = ""):
         ("CARD_PAYMENT_LINK", admin_t("card_payment_link")),
         ("PAYME_PAYMENT_LINK", admin_t("payme_link")),
         ("CLICK_PAYMENT_LINK", admin_t("click_link")),
+        ("ADMIN_TELEGRAM_NOTIFICATIONS", "Telegram admin notify (0/1)"),
         ("ESIMGO_API_KEY", admin_t("esimgo_api_key")),
         ("ESIMGO_API_BASE", admin_t("esimgo_api_base")),
         ("ESIM_MARKUP_PERCENT", admin_t("esim_markup_percent")),
@@ -1376,6 +1382,7 @@ def update_bot_settings(params: dict) -> None:
         "CARD_PAYMENT_LINK",
         "PAYME_PAYMENT_LINK",
         "CLICK_PAYMENT_LINK",
+        "ADMIN_TELEGRAM_NOTIFICATIONS",
         "ESIMGO_API_KEY",
         "ESIMGO_API_BASE",
         "ESIM_MARKUP_PERCENT",
@@ -1489,6 +1496,31 @@ def update_order_status(order_id: str, status: str) -> None:
         if order.get("id") == order_id:
             order["status"] = status
     write_json("orders.json", orders)
+
+
+def fulfill_order_from_panel(order_id: str) -> str:
+    import bot
+
+    bot.DATA_DIR = DATA_DIR
+    bot.ORDERS_FILE = DATA_DIR / "orders.json"
+    bot.USERS_FILE = DATA_DIR / "users.json"
+    bot.REMINDERS_FILE = DATA_DIR / "reminders.json"
+    bot.STATES_FILE = DATA_DIR / "states.json"
+    bot.SUPPORT_FILE = DATA_DIR / "support_messages.json"
+    bot.PACKAGES_FILE = DATA_DIR / "esim_packages.json"
+    bot.ESIMGO_CATALOGUE_CACHE_FILE = DATA_DIR / "esimgo_catalogue_cache.json"
+
+    order, message = bot.fulfill_order_with_esimgo(order_id)
+    if not order:
+        return message
+
+    customer_lang = bot.get_user_lang(order.get("user_id"))
+    send_plain_bot_message(
+        str(order["user_id"]),
+        bot.customer_esim_text(order, customer_lang),
+        auto_translate=False,
+    )
+    return f"{message} Mijozga yuborildi: #{order['id']}"
 
 
 def send_bot_message(user_id: str, text: str, auto_translate: bool = True) -> None:
@@ -1896,6 +1928,18 @@ class Handler(BaseHTTPRequestHandler):
             back = params.get("back", ["/orders"])[0]
             if not back.startswith("/"):
                 back = "/orders"
+            self.send_header("Location", back)
+            self.end_headers()
+            return
+        if path == "/order-fulfill":
+            back = params.get("back", ["/orders"])[0]
+            if not back.startswith("/"):
+                back = "/orders"
+            try:
+                fulfill_order_from_panel(params.get("id", [""])[0])
+            except Exception as exc:
+                print(f"Panel fulfill xatosi: {exc}")
+            self.send_response(303)
             self.send_header("Location", back)
             self.end_headers()
             return
