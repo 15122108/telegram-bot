@@ -20,6 +20,7 @@ PORT = int(os.environ.get("PORT", "8088"))
 SESSION_COOKIE = "admin_session"
 SESSION_TTL_SECONDS = 60 * 60
 PACKAGES_FILE = "esim_packages.json"
+ADMIN_CONFIG_FILE = "admin_config.json"
 LANG_COOKIE = "admin_lang"
 CURRENT_ADMIN_LANG = "uz"
 ADMIN_TEXT = {
@@ -626,12 +627,51 @@ def display_text(text: str) -> str:
     return translate_text(text, CURRENT_ADMIN_LANG)
 
 
+def admin_config() -> dict:
+    config = read_json(ADMIN_CONFIG_FILE, {})
+    return config if isinstance(config, dict) else {}
+
+
+def write_admin_config(config: dict) -> None:
+    write_json(ADMIN_CONFIG_FILE, config)
+
+
+def hash_admin_password(password: str, salt: str | None = None) -> str:
+    salt = salt or secrets.token_urlsafe(16)
+    digest = hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
+    return f"sha256${salt}${digest}"
+
+
+def verify_admin_password(password: str) -> bool:
+    config = admin_config()
+    stored_hash = str(config.get("password_hash") or "")
+    if stored_hash.startswith("sha256$"):
+        try:
+            _, salt, digest = stored_hash.split("$", 2)
+        except ValueError:
+            return False
+        expected = hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
+        return hmac.compare_digest(digest, expected)
+
+    configured = admin_password()
+    return bool(configured and hmac.compare_digest(password, configured))
+
+
 def admin_password() -> str:
     return read_env("ADMIN_PANEL_PASSWORD")
 
 
 def session_secret() -> str:
-    return read_env("ADMIN_PANEL_SECRET", admin_password())
+    config = admin_config()
+    return str(config.get("session_secret") or read_env("ADMIN_PANEL_SECRET", admin_password()))
+
+
+def set_admin_password(new_password: str) -> None:
+    config = admin_config()
+    config["password_hash"] = hash_admin_password(new_password)
+    config["session_secret"] = secrets.token_urlsafe(32)
+    config["updated_at"] = datetime.now(timezone.utc).isoformat()
+    write_admin_config(config)
 
 
 def sign_session(expiry: int) -> str:
@@ -1459,17 +1499,13 @@ def settings_page(message: str = "", error: str = ""):
 
 
 def change_admin_password(current_password: str, new_password: str, confirm_password: str) -> tuple[bool, str]:
-    configured = admin_password()
-    if not configured or not hmac.compare_digest(current_password, configured):
+    if not verify_admin_password(current_password):
         return False, admin_t("old_password_wrong")
     if len(new_password) < 8:
         return False, admin_t("new_password_short")
     if new_password != confirm_password:
         return False, admin_t("new_password_mismatch")
-    write_env_values({
-        "ADMIN_PANEL_PASSWORD": new_password,
-        "ADMIN_PANEL_SECRET": secrets.token_urlsafe(32),
-    })
+    set_admin_password(new_password)
     return True, admin_t("password_changed")
 
 
@@ -2026,8 +2062,7 @@ class Handler(BaseHTTPRequestHandler):
             params = parse_qs(self.rfile.read(length).decode("utf-8"))
         if path == "/login":
             password = params.get("password", [""])[0]
-            configured = admin_password()
-            if configured and hmac.compare_digest(password, configured):
+            if verify_admin_password(password):
                 expiry = int(time.time()) + SESSION_TTL_SECONDS
                 token = sign_session(expiry)
                 self.send_response(303)
