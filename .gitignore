@@ -12,6 +12,7 @@ bot.log
 bot.err.log
 bot.pid
 bot-local.pid
+start-local-bot.txt
 *.log
 payment_qr.jpg
 payment_qr.png

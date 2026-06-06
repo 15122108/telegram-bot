@@ -4,6 +4,7 @@ $workspace = "C:\Users\acer\Documents\New project\telegram-bot"
 $tunnelScript = Join-Path $workspace "keep-admin-panel-tunnel.ps1"
 $urlFile = Join-Path $workspace "admin-panel-url.txt"
 $botPidFile = Join-Path $workspace "bot-local.pid"
+$startLocalBotFile = Join-Path $workspace "start-local-bot.txt"
 $defaultPanelUrl = "http://127.0.0.1:8088/login"
 $panelUrl = $defaultPanelUrl
 
@@ -105,7 +106,7 @@ function Start-LocalBot {
     }
 }
 
-if ($usesLocalTunnel) {
+if ($usesLocalTunnel -and (($env:START_LOCAL_BOT -eq "1") -or (Test-Path -LiteralPath $startLocalBotFile))) {
     Start-LocalBot
 }
 

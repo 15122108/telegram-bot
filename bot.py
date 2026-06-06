@@ -1934,8 +1934,12 @@ def run_bot(token: str) -> None:
                 offset = update["update_id"] + 1
                 handle_update(token, update)
         except urllib.error.HTTPError as exc:
-            print(f"Telegram HTTP xatosi: {exc.code} {exc.reason}")
-            time.sleep(5)
+            if exc.code == 409:
+                print("Telegram HTTP xatosi: 409 Conflict. Bot boshqa server yoki processda ham ishlayapti; bu instance 60 soniya kutadi.")
+                time.sleep(60)
+            else:
+                print(f"Telegram HTTP xatosi: {exc.code} {exc.reason}")
+                time.sleep(5)
         except urllib.error.URLError as exc:
             print(f"Tarmoq xatosi: {exc.reason}")
             time.sleep(5)
