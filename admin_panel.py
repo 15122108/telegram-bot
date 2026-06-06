@@ -748,6 +748,12 @@ def layout(title: str, body: str) -> bytes:
     .badge {{ display: inline-block; padding: 3px 8px; border-radius: 999px; background: #eef4ff; color: #123d76; font-size: 12px; }}
     .open {{ background: #fff3cd; color: #8a5a00; }}
     .replied {{ background: #dcfce7; color: #166534; }}
+    .nav-badge {{ float: right; min-width: 20px; text-align: center; background: #f04438; color: white; border-radius: 999px; padding: 1px 6px; font-size: 12px; font-weight: 700; }}
+    .notify-toast {{ position: fixed; right: 18px; bottom: 18px; width: min(360px, calc(100vw - 36px)); background: #102a56; color: white; border-radius: 8px; padding: 13px 14px; box-shadow: 0 18px 48px rgba(16, 24, 40, .28); z-index: 80; display: none; }}
+    .notify-toast.show {{ display: block; }}
+    .notify-toast b {{ display: block; margin-bottom: 4px; }}
+    .notify-toast p {{ margin: 0 0 10px; color: #d9e8fb; }}
+    .notify-toast a, .notify-toast button {{ color: white; background: #1f63b5; text-decoration: none; border-radius: 6px; padding: 7px 10px; display: inline-block; margin-right: 6px; }}
     .preview {{ max-width: 360px; max-height: 260px; display: block; border: 1px solid #dde3ee; border-radius: 8px; margin-top: 8px; cursor: zoom-in; }}
     .modal {{ position: fixed; inset: 0; background: rgba(12, 18, 32, .82); display: none; align-items: center; justify-content: center; z-index: 50; padding: 22px; }}
     .modal.opened {{ display: flex; }}
@@ -764,6 +770,12 @@ def layout(title: str, body: str) -> bytes:
   </style>
 </head>
 <body>
+  <div class="notify-toast" id="global-support-toast">
+    <b>{esc(admin_t("new_support"))}</b>
+    <p id="global-support-toast-text">{esc(admin_t("new_support_body"))}</p>
+    <a href="/support">{esc(admin_t("support"))}</a>
+    <button type="button" onclick="globalEnableNotifications()">{esc(admin_t("enable_notifications"))}</button>
+  </div>
   <div class="shell">
     <aside>
       <div class="brand">
@@ -792,6 +804,95 @@ def layout(title: str, body: str) -> bytes:
       <main>{body}</main>
     </div>
   </div>
+  <script>
+const globalOriginalTitle = document.title;
+let globalLatestSupportId = localStorage.getItem("visa_esim_latest_support_id") || "";
+let globalSupportReady = false;
+
+function globalBeep() {{
+  try {{
+    const audio = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    oscillator.connect(gain);
+    gain.connect(audio.destination);
+    oscillator.frequency.value = 960;
+    gain.gain.value = 0.09;
+    oscillator.start();
+    setTimeout(function() {{
+      oscillator.stop();
+      audio.close();
+    }}, 220);
+  }} catch (error) {{}}
+}}
+
+function globalEnableNotifications() {{
+  if (!("Notification" in window)) return;
+  Notification.requestPermission();
+}}
+
+function globalShowSupportNotice(data) {{
+  const toast = document.getElementById("global-support-toast");
+  const text = document.getElementById("global-support-toast-text");
+  if (text) text.textContent = data.latest_text || {json.dumps(admin_t("new_support_body"))};
+  if (toast) {{
+    toast.classList.add("show");
+    setTimeout(function() {{ toast.classList.remove("show"); }}, 9000);
+  }}
+  globalBeep();
+  if ("Notification" in window && Notification.permission === "granted") {{
+    new Notification({json.dumps(admin_t("new_support"))}, {{
+      body: data.latest_text || {json.dumps(admin_t("new_support_body"))}
+    }});
+  }}
+}}
+
+function globalMarkSupportCount(openCount) {{
+  document.title = openCount ? "(" + openCount + ") " + globalOriginalTitle : globalOriginalTitle;
+  document.querySelectorAll("nav a").forEach(function(link) {{
+    if (link.getAttribute("href") !== "/support") return;
+    let badge = link.querySelector(".nav-badge");
+    if (openCount > 0) {{
+      if (!badge) {{
+        badge = document.createElement("span");
+        badge.className = "nav-badge";
+        link.appendChild(badge);
+      }}
+      badge.textContent = openCount;
+    }} else if (badge) {{
+      badge.remove();
+    }}
+  }});
+}}
+
+async function globalPollSupport() {{
+  try {{
+    const response = await fetch("/support-state?latest=" + encodeURIComponent(globalLatestSupportId), {{cache: "no-store"}});
+    if (!response.ok) return;
+    const data = await response.json();
+    globalMarkSupportCount(data.open_count || 0);
+    if (!globalSupportReady) {{
+      globalSupportReady = true;
+      if (data.latest_id) {{
+        globalLatestSupportId = data.latest_id;
+        localStorage.setItem("visa_esim_latest_support_id", data.latest_id);
+      }}
+      return;
+    }}
+    if (data.latest_id && data.latest_id !== globalLatestSupportId) {{
+      globalLatestSupportId = data.latest_id;
+      localStorage.setItem("visa_esim_latest_support_id", data.latest_id);
+      globalShowSupportNotice(data);
+      if (window.location.pathname === "/support") {{
+        setTimeout(function() {{ window.location.reload(); }}, 700);
+      }}
+    }}
+  }} catch (error) {{}}
+}}
+
+globalPollSupport();
+setInterval(globalPollSupport, 1500);
+  </script>
 </body>
 </html>"""
     return page.encode("utf-8")
