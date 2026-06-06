@@ -250,7 +250,7 @@ def telegram_request(
         request_timeout = 12
         if method == "getUpdates" and isinstance(payload, dict):
             try:
-                request_timeout = int(payload.get("timeout", 30)) + 5
+                request_timeout = int(payload.get("timeout", 30)) + 20
             except (TypeError, ValueError):
                 request_timeout = 35
 
@@ -1931,7 +1931,7 @@ def run_bot(token: str) -> None:
 
     while True:
         payload = {
-            "timeout": 10,
+            "timeout": 25,
             "allowed_updates": ["message", "edited_message", "callback_query"],
         }
         if offset is not None:
@@ -1954,9 +1954,17 @@ def run_bot(token: str) -> None:
             else:
                 print(f"Telegram HTTP xatosi: {exc.code} {exc.reason}")
                 time.sleep(2)
+        except TimeoutError:
+            time.sleep(0.5)
         except urllib.error.URLError as exc:
             print(f"Tarmoq xatosi: {exc.reason}")
             time.sleep(2)
+        except OSError as exc:
+            if "timed out" in str(exc).lower():
+                time.sleep(0.5)
+            else:
+                print(f"Tarmoq xatosi: {exc}")
+                time.sleep(2)
         except Exception as exc:
             print(f"Kutilmagan xato: {exc}")
             time.sleep(2)
