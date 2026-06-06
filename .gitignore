@@ -6,6 +6,7 @@ users.json
 reminders.json
 states.json
 support_messages.json
+conversations.json
 esim_packages.json
 esimgo_catalogue_cache.json
 bot.log

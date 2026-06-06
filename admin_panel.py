@@ -90,7 +90,7 @@ ADMIN_TEXT = {
         "reply_write": "Javob yozing...",
         "send_reply": "Javob yuborish",
         "support_state": "Yordam holati",
-        "open_messages_suffix": "ta ochiq xabar.",
+        "open_messages_suffix": "ta o'qilmagan xabar.",
         "enable_notifications": "Bildirishnomani yoqish",
         "notify_unsupported": "Bu brauzer notification qo'llamaydi.",
         "notify_enabled": "Yoqildi.",
@@ -213,7 +213,7 @@ ADMIN_TEXT = {
         "reply_write": "Напишите ответ...",
         "send_reply": "Отправить ответ",
         "support_state": "Состояние поддержки",
-        "open_messages_suffix": "открытых сообщений.",
+        "open_messages_suffix": "непрочитанных сообщений.",
         "enable_notifications": "Включить уведомления",
         "notify_unsupported": "Этот браузер не поддерживает уведомления.",
         "notify_enabled": "Включено.",
@@ -328,7 +328,7 @@ ADMIN_TEXT = {
         "reply_write": "Write a reply...",
         "send_reply": "Send reply",
         "support_state": "Support status",
-        "open_messages_suffix": "open messages.",
+        "open_messages_suffix": "unread messages.",
         "enable_notifications": "Enable notifications",
         "notify_unsupported": "This browser does not support notifications.",
         "notify_enabled": "Enabled.",
@@ -453,7 +453,7 @@ ADMIN_TEXT["ru"] = {
     "reply_write": "Напишите ответ...",
     "send_reply": "Отправить ответ",
     "support_state": "Статус поддержки",
-    "open_messages_suffix": "открытых сообщений.",
+    "open_messages_suffix": "непрочитанных сообщений.",
     "enable_notifications": "Включить уведомления",
     "notify_unsupported": "Этот браузер не поддерживает уведомления.",
     "notify_enabled": "Включено.",
@@ -814,7 +814,6 @@ def layout(title: str, body: str) -> bytes:
     <b>{esc(admin_t("new_support"))}</b>
     <p id="global-support-toast-text">{esc(admin_t("new_support_body"))}</p>
     <a href="/support">{esc(admin_t("support"))}</a>
-    <button type="button" onclick="globalEnableNotifications()">{esc(admin_t("enable_notifications"))}</button>
   </div>
   <div class="shell">
     <aside>
@@ -864,11 +863,6 @@ function globalBeep() {{
       audio.close();
     }}, 220);
   }} catch (error) {{}}
-}}
-
-function globalEnableNotifications() {{
-  if (!("Notification" in window)) return;
-  Notification.requestPermission();
 }}
 
 function globalShowSupportNotice(data) {{
@@ -1201,6 +1195,7 @@ def user_detail_page(user_id: str):
     support_messages = [
         item for item in read_json("support_messages.json", []) if str(item.get("user_id")) == user_id
     ]
+    conversation_messages = read_json("conversations.json", {}).get(str(user_id), [])
     user = users.get(user_id, {})
     if not user:
         for item in collect_users():
@@ -1241,6 +1236,19 @@ def user_detail_page(user_id: str):
             f"<td>{esc(item.get('created_at'))}</td></tr>"
         )
 
+    conversation_rows = []
+    for item in reversed(conversation_messages[-120:]):
+        direction = item.get("direction") or ""
+        direction_label = "Mijoz" if direction == "user" else "Bot/Admin"
+        attachment = item.get("attachment") or {}
+        file_label = attachment.get("type") or attachment.get("file_name") or ""
+        conversation_rows.append(
+            f"<tr><td>{esc(item.get('created_at'))}</td>"
+            f"<td><span class='badge {esc(direction)}'>{esc(direction_label)}</span></td>"
+            f"<td>{esc(display_text(item.get('text')))}</td>"
+            f"<td>{esc(file_label)}</td></tr>"
+        )
+
     body = f"""
 <h3>{esc(admin_t('user'))} {esc(user_id)}</h3>
 <div class="cards">
@@ -1264,6 +1272,8 @@ def user_detail_page(user_id: str):
 <table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('visa_reminders'))}</th><th>{esc(admin_t('sent'))}</th><th>{esc(admin_t('created'))}</th></tr>{''.join(reminder_rows)}</table>
 <h4>{esc(admin_t('support_questions'))}</h4>
 <table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('status'))}</th><th>{esc(admin_t('question'))}</th><th>{esc(admin_t('file'))}</th><th>{esc(admin_t('answer'))}</th><th>{esc(admin_t('created'))}</th></tr>{''.join(support_rows)}</table>
+<h4>Suhbat tarixi</h4>
+<table><tr><th>{esc(admin_t('created'))}</th><th>Kim</th><th>Xabar</th><th>{esc(admin_t('file'))}</th></tr>{''.join(conversation_rows)}</table>
 """
     return layout(f"{admin_t('user')} {user_id}", body)
 
@@ -1284,10 +1294,28 @@ def attachment_html(item: dict) -> str:
     return link
 
 
+def support_unread_count(messages: list[dict]) -> int:
+    return sum(1 for item in messages if item.get("status") != "replied" and not item.get("seen_at"))
+
+
+def mark_support_seen(support_id: str) -> None:
+    if not support_id:
+        return
+    messages = read_json("support_messages.json", [])
+    changed = False
+    now = datetime.now(timezone.utc).isoformat()
+    for item in messages:
+        if item.get("id") == support_id and not item.get("seen_at"):
+            item["seen_at"] = now
+            changed = True
+            break
+    if changed:
+        write_json("support_messages.json", messages)
+
+
 def support_page(selected_id: str = ""):
     messages = read_json("support_messages.json", [])
     latest_id = messages[-1].get("id") if messages else ""
-    open_count = sum(1 for item in messages if item.get("status") != "replied")
     selected = None
     if selected_id:
         selected = next((item for item in messages if item.get("id") == selected_id), None)
@@ -1295,6 +1323,11 @@ def support_page(selected_id: str = ""):
         selected = next((item for item in reversed(messages) if item.get("status") != "replied"), None)
         if selected is None:
             selected = messages[-1]
+    if selected:
+        mark_support_seen(str(selected.get("id") or ""))
+        messages = read_json("support_messages.json", [])
+        selected = next((item for item in messages if item.get("id") == selected.get("id")), selected)
+    open_count = support_unread_count(messages)
 
     rows = []
     for item in reversed(messages):
@@ -1328,8 +1361,6 @@ def support_page(selected_id: str = ""):
     body = f"""
 <div class="card" id="support-alert">
   <b>{esc(admin_t('support_state'))}:</b> <span id="support-open-count">{open_count}</span> {esc(admin_t('open_messages_suffix'))}
-  <button type="button" onclick="enableNotifications()">{esc(admin_t('enable_notifications'))}</button>
-  <span class="muted" id="notify-status"></span>
 </div>
 {selected_html}
 <h3>{esc(admin_t('support'))} inbox</h3>
@@ -1364,17 +1395,6 @@ function closeMedia() {{
 document.addEventListener("keydown", function(event) {{
   if (event.key === "Escape") closeMedia();
 }});
-
-function enableNotifications() {{
-  if (!("Notification" in window)) {{
-    document.getElementById("notify-status").textContent = {json.dumps(admin_t('notify_unsupported'))};
-    return;
-  }}
-  Notification.requestPermission().then(function(permission) {{
-    document.getElementById("notify-status").textContent =
-      permission === "granted" ? {json.dumps(admin_t('notify_enabled'))} : {json.dumps(admin_t('notify_denied'))};
-  }});
-}}
 
 function beep() {{
   try {{
@@ -1431,7 +1451,7 @@ setInterval(pollSupport, 3000);
 def support_state() -> bytes:
     messages = read_json("support_messages.json", [])
     latest = messages[-1] if messages else {}
-    open_count = sum(1 for item in messages if item.get("status") != "replied")
+    open_count = support_unread_count(messages)
     payload = {
         "count": len(messages),
         "open_count": open_count,
@@ -1624,6 +1644,7 @@ def export_page():
   <div class="card"><h4>{esc(admin_t("orders"))}</h4><p><a href="/export-file?name=orders.json">orders.json {esc(admin_t("download"))}</a></p></div>
   <div class="card"><h4>{esc(admin_t("users"))}</h4><p><a href="/export-file?name=users.json">users.json {esc(admin_t("download"))}</a></p></div>
   <div class="card"><h4>{esc(admin_t("support"))}</h4><p><a href="/export-file?name=support_messages.json">support_messages.json {esc(admin_t("download"))}</a></p></div>
+  <div class="card"><h4>Suhbat tarixi</h4><p><a href="/export-file?name=conversations.json">conversations.json {esc(admin_t("download"))}</a></p></div>
   <div class="card"><h4>{esc(admin_t("visa_reminders"))}</h4><p><a href="/export-file?name=reminders.json">reminders.json {esc(admin_t("download"))}</a></p></div>
   <div class="card"><h4>{esc(admin_t("packages"))}</h4><p><a href="/export-file?name=esim_packages.json">esim_packages.json {esc(admin_t("download"))}</a></p></div>
 </div>
@@ -1663,6 +1684,7 @@ def fulfill_order_from_panel(order_id: str) -> str:
     bot.REMINDERS_FILE = DATA_DIR / "reminders.json"
     bot.STATES_FILE = DATA_DIR / "states.json"
     bot.SUPPORT_FILE = DATA_DIR / "support_messages.json"
+    bot.CONVERSATIONS_FILE = DATA_DIR / "conversations.json"
     bot.PACKAGES_FILE = DATA_DIR / "esim_packages.json"
     bot.ESIMGO_CATALOGUE_CACHE_FILE = DATA_DIR / "esimgo_catalogue_cache.json"
 
@@ -1723,6 +1745,28 @@ def send_plain_bot_message(user_id: str, text: str, auto_translate: bool = True)
     )
     with urlopen(request, timeout=10) as response:
         response.read()
+    append_conversation_message(user_id, "bot", outgoing_text)
+
+
+def append_conversation_message(user_id: str, direction: str, text: str) -> None:
+    conversations = read_json("conversations.json", {})
+    if not isinstance(conversations, dict):
+        conversations = {}
+    key = str(user_id)
+    items = conversations.get(key)
+    if not isinstance(items, list):
+        items = []
+    items.append(
+        {
+            "direction": direction,
+            "text": text or "",
+            "attachment": {},
+            "message_id": None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    conversations[key] = items[-500:]
+    write_json("conversations.json", conversations)
 
 
 def telegram_multipart(method: str, fields: dict[str, str], file_field: str, filename: str, content_type: str, file_bytes: bytes) -> None:
@@ -1989,7 +2033,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/export-file":
             query = parse_qs(urlparse(self.path).query)
             name = query.get("name", [""])[0]
-            allowed = {"orders.json", "users.json", "support_messages.json", "reminders.json", "esim_packages.json"}
+            allowed = {"orders.json", "users.json", "support_messages.json", "conversations.json", "reminders.json", "esim_packages.json"}
             if name not in allowed:
                 self.send_response(400)
                 self.end_headers()

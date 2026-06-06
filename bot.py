@@ -19,6 +19,7 @@ USERS_FILE = DATA_DIR / "users.json"
 REMINDERS_FILE = DATA_DIR / "reminders.json"
 STATES_FILE = DATA_DIR / "states.json"
 SUPPORT_FILE = DATA_DIR / "support_messages.json"
+CONVERSATIONS_FILE = DATA_DIR / "conversations.json"
 PACKAGES_FILE = DATA_DIR / "esim_packages.json"
 ESIMGO_CATALOGUE_CACHE_FILE = DATA_DIR / "esimgo_catalogue_cache.json"
 USERS_CACHE: dict | None = None
@@ -507,6 +508,7 @@ def send_message(token: str, chat_id: int, text: str, reply_markup: dict | None 
         "sendMessage",
         payload,
     )
+    append_conversation_message(chat_id, "bot", text)
 
 
 def send_photo(token: str, chat_id: int, photo_path: Path, caption: str) -> None:
@@ -545,6 +547,12 @@ def send_photo(token: str, chat_id: int, photo_path: Path, caption: str) -> None
         result = json.loads(response.read().decode("utf-8"))
     if not result.get("ok"):
         raise RuntimeError(f"Telegram API error: {result}")
+    append_conversation_message(
+        chat_id,
+        "bot",
+        caption,
+        {"type": "photo", "file_name": filename},
+    )
 
 
 def answer_callback_query(token: str, callback_query_id: str) -> None:
@@ -579,6 +587,50 @@ def read_json_file(path: Path, default):
 
 def write_json_file(path: Path, value) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def conversation_attachment(message: dict) -> dict:
+    attachment = support_attachment(message)
+    if attachment:
+        return attachment
+    for file_type in ("sticker", "voice", "audio"):
+        if file_type in message:
+            item = message[file_type]
+            return {
+                "type": file_type,
+                "file_id": item.get("file_id"),
+                "file_name": item.get("file_name") or file_type,
+            }
+    return {}
+
+
+def append_conversation_message(
+    user_id,
+    direction: str,
+    text: str = "",
+    attachment: dict | None = None,
+    message_id: int | None = None,
+) -> None:
+    if user_id is None:
+        return
+    conversations = read_json_file(CONVERSATIONS_FILE, {})
+    if not isinstance(conversations, dict):
+        conversations = {}
+    key = str(user_id)
+    items = conversations.get(key)
+    if not isinstance(items, list):
+        items = []
+    items.append(
+        {
+            "direction": direction,
+            "text": text or "",
+            "attachment": attachment or {},
+            "message_id": message_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    conversations[key] = items[-500:]
+    write_json_file(CONVERSATIONS_FILE, conversations)
 
 
 def get_user_state(user_id: int | None) -> dict | None:
@@ -1173,6 +1225,7 @@ def append_support_message(
         "text": text,
         "message_id": message_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "seen_at": "",
         "answered_at": "",
         "answer": "",
         "attachment": attachment or {},
@@ -1940,6 +1993,11 @@ def handle_update(token: str, update: dict) -> None:
     if callback_query:
         answer_callback_query(token, callback_query["id"])
         remember_user(callback_query.get("from", {}))
+        append_conversation_message(
+            callback_query.get("from", {}).get("id"),
+            "user",
+            f"[button] {callback_query.get('data') or ''}",
+        )
         message = callback_query.get("message", {})
         chat_id = message.get("chat", {}).get("id")
         if chat_id is None:
@@ -1968,6 +2026,13 @@ def handle_update(token: str, update: dict) -> None:
     user_id = message.get("from", {}).get("id")
     remember_user(message.get("from", {}))
     text = message.get("text") or message.get("caption")
+    append_conversation_message(
+        user_id,
+        "user",
+        text or "",
+        conversation_attachment(message),
+        message.get("message_id"),
+    )
     has_support_attachment = bool(support_attachment(message))
     if not text and not (has_support_attachment and get_user_state(user_id)):
         return
