@@ -1069,14 +1069,18 @@ def notify_admin_support(token: str, message: dict) -> None:
         return
 
     user = message.get("from", {})
-    text = message.get("text", "")
+    text = message.get("text") or message.get("caption") or ""
+    attachment = support_attachment(message)
     username = user.get("username")
     user_ref = f"@{username}" if username else f"id:{user.get('id')}"
+    attachment_line = ""
+    if attachment:
+        attachment_line = f"\nFayl: {attachment.get('type')} ({attachment.get('file_name')})"
     support_message = (
         "Support xabar:\n"
         f"Mijoz: {user_ref}\n"
         f"User ID: {user.get('id')}\n\n"
-        f"{text}\n\n"
+        f"{text}{attachment_line}\n\n"
         f"Javob berish: /reply {user.get('id')} javob matni"
     )
     send_message(token, int(admin_chat_id), support_message)
@@ -1403,11 +1407,6 @@ def set_support_state(user: dict) -> None:
             "created_at": datetime.now(timezone.utc).isoformat(),
         },
     )
-    append_support_message(
-        user,
-        "Support bo'limi ochildi. Mijoz savol yozishini kuting.",
-        None,
-    )
 
 
 def payment_methods_text(lang: str = DEFAULT_LANG) -> str:
@@ -1557,6 +1556,7 @@ def build_reply(token: str, message: dict) -> tuple[str, dict | None]:
     if state and state.get("type") == "awaiting_support_message" and not text.startswith("/"):
         set_user_state(user.get("id"), None)
         save_support_message(message)
+        notify_admin_support(token, message)
         return (
             "Xabaringiz adminga yuborildi. Tez orada shu chatda javob olasiz.",
             main_menu(lang),
@@ -1737,6 +1737,7 @@ def build_reply(token: str, message: dict) -> tuple[str, dict | None]:
 
     if not is_admin_chat(message.get("chat", {}).get("id")):
         save_support_message(message)
+        notify_admin_support(token, message)
         return (
             "Xabaringiz adminga yuborildi. Tez orada shu chatda javob olasiz.",
             main_menu(lang),
