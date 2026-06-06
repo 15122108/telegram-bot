@@ -45,6 +45,20 @@ function Test-Panel {
     }
 }
 
+function Open-PanelApp {
+    $edge = $edgePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($edge) {
+        Start-Process -FilePath $edge -ArgumentList @(
+            "--app=$panelUrl",
+            "--new-window",
+            "--window-size=1280,860",
+            "--user-data-dir=$workspace\admin-panel-profile"
+        )
+    } else {
+        Start-Process $panelUrl
+    }
+}
+
 function Start-LocalPanel {
     $python = $pythonPaths | Where-Object {
         if ($_ -eq "python.exe") { return $true }
@@ -110,6 +124,11 @@ if ($usesLocalTunnel -and (($env:START_LOCAL_BOT -eq "1") -or (Test-Path -Litera
     Start-LocalBot
 }
 
+if (-not $usesLocalTunnel) {
+    Open-PanelApp
+    exit 0
+}
+
 if ($usesLocalTunnel -and -not (Test-Panel)) {
     Start-LocalPanel
     Start-Sleep -Seconds 2
@@ -123,17 +142,7 @@ if ($usesLocalTunnel -and -not (Test-Panel)) {
 
 for ($i = 0; $i -lt 20; $i++) {
     if (Test-Panel) {
-        $edge = $edgePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-        if ($edge) {
-            Start-Process -FilePath $edge -ArgumentList @(
-                "--app=$panelUrl",
-                "--new-window",
-                "--window-size=1280,860",
-                "--user-data-dir=$workspace\admin-panel-profile"
-            )
-        } else {
-            Start-Process $panelUrl
-        }
+        Open-PanelApp
         exit 0
     }
     Start-Sleep -Seconds 1
