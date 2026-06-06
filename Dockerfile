@@ -3,6 +3,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 COPY bot.py admin_panel.py start_koyeb.py ./
+COPY assets ./assets
 
 ENV PYTHONUNBUFFERED=1
 ENV DATA_DIR=/data
