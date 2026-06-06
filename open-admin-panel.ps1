@@ -28,6 +28,12 @@ $edgePaths = @(
     "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
     "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
 )
+$electronPath = Join-Path $workspace "node_modules\electron\dist\electron.exe"
+$npmPaths = @(
+    "$env:ProgramFiles\nodejs\npm.cmd",
+    "${env:ProgramFiles(x86)}\nodejs\npm.cmd",
+    "npm.cmd"
+)
 $pythonPaths = @(
     "$workspace\.venv\Scripts\python.exe",
     "C:\Users\acer\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe",
@@ -46,6 +52,22 @@ function Test-Panel {
 }
 
 function Open-PanelApp {
+    if (Test-Path -LiteralPath $electronPath) {
+        $npm = $npmPaths | Where-Object {
+            if ($_ -eq "npm.cmd") { return $true }
+            Test-Path -LiteralPath $_
+        } | Select-Object -First 1
+        if ($npm) {
+            Start-Process -WindowStyle Hidden `
+                -FilePath $npm `
+                -ArgumentList @("run", "admin", "--silent") `
+                -WorkingDirectory $workspace
+            return
+        }
+        Start-Process -FilePath $electronPath -ArgumentList @($workspace) -WorkingDirectory $workspace
+        return
+    }
+
     $edge = $edgePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
     if ($edge) {
         Start-Process -FilePath $edge -ArgumentList @(

@@ -1,0 +1,13 @@
+{
+  "name": "visa-esim-admin-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Desktop wrapper for Visa eSIM Admin Panel",
+  "main": "desktop-admin/main.js",
+  "scripts": {
+    "admin": "electron desktop-admin/main.js"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7"
+  }
+}
