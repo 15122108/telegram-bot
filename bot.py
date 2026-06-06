@@ -1,5 +1,6 @@
 ﻿import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -169,6 +170,9 @@ DEFAULT_ESIM_PACKAGES = {
 def esim_packages() -> dict:
     manual_fallback = os.environ.get("ALLOW_MANUAL_ESIM_FALLBACK", "0").strip() == "1"
     if esimgo_enabled():
+        cached_packages = cached_esimgo_packages()
+        if cached_packages:
+            return cached_packages
         try:
             packages = esimgo_catalogue()
             if packages:
@@ -392,12 +396,11 @@ def esimgo_catalogue(force_refresh: bool = False) -> dict:
     global ESIMGO_CATALOGUE_CACHE
     if ESIMGO_CATALOGUE_CACHE is not None and not force_refresh:
         return ESIMGO_CATALOGUE_CACHE
-    cached = read_json_file(ESIMGO_CATALOGUE_CACHE_FILE, {})
+    if not force_refresh:
+        cached = cached_esimgo_packages(max_age_seconds=24 * 3600)
+        if cached:
+            return cached
     now = time.time()
-    if not force_refresh and isinstance(cached, dict) and cached.get("packages"):
-        if now - float(cached.get("updated_at", 0)) < 24 * 3600:
-            ESIMGO_CATALOGUE_CACHE = cached["packages"]
-            return ESIMGO_CATALOGUE_CACHE
     raw = esimgo_request("/catalogue?page=1&perPage=500&direction=asc&orderBy=description")
     packages = normalize_esimgo_catalogue(raw)
     if packages:
@@ -408,6 +411,38 @@ def esimgo_catalogue(force_refresh: bool = False) -> dict:
         ESIMGO_CATALOGUE_CACHE = packages
         return packages
     return {}
+
+
+def cached_esimgo_packages(max_age_seconds: int | None = None) -> dict:
+    global ESIMGO_CATALOGUE_CACHE
+    if ESIMGO_CATALOGUE_CACHE:
+        return ESIMGO_CATALOGUE_CACHE
+    cached = read_json_file(ESIMGO_CATALOGUE_CACHE_FILE, {})
+    if not isinstance(cached, dict) or not isinstance(cached.get("packages"), dict):
+        return {}
+    packages = cached.get("packages") or {}
+    if not packages:
+        return {}
+    if max_age_seconds is not None:
+        try:
+            age_seconds = time.time() - float(cached.get("updated_at", 0))
+        except (TypeError, ValueError):
+            return {}
+        if age_seconds > max_age_seconds:
+            return {}
+    ESIMGO_CATALOGUE_CACHE = packages
+    return packages
+
+
+def warm_esimgo_catalogue() -> None:
+    if not esimgo_enabled():
+        return
+    try:
+        packages = esimgo_catalogue(force_refresh=False)
+        if packages:
+            print(f"eSIM Go katalog tayyor: {len(packages)} davlat.")
+    except Exception as exc:
+        print(f"eSIM Go katalog tayyorlash xatosi: {exc}")
 
 
 def esimgo_enabled() -> bool:
@@ -1952,6 +1987,7 @@ def run_bot(token: str) -> None:
     offset = None
     last_reminder_check = 0.0
     print("Bot ishga tushdi. To'xtatish uchun Ctrl+C bosing.")
+    threading.Thread(target=warm_esimgo_catalogue, daemon=True).start()
 
     while True:
         payload = {
