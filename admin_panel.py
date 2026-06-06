@@ -1410,6 +1410,11 @@ def packages_page(message: str = "", error: str = ""):
 {message_html}
 {error_html}
 <div class="card">
+  <h4>eSIM Go katalog</h4>
+  <p class="muted">Real provider katalogini yangilash. Bu amal botdagi /refresh_esim o'rniga admin paneldan bajariladi.</p>
+  <form method="post" action="/refresh-esim"><button>eSIM Go katalogni yangilash</button></form>
+</div>
+<div class="card">
   <h4>{esc(admin_t("add_update_country"))}</h4>
   <form method="post" action="/package-save">
     <p><label>{esc(admin_t("code"))}</label><br><input type="text" name="code" placeholder="masalan: uae" required></p>
@@ -1459,6 +1464,20 @@ def delete_package(code: str) -> None:
     packages = read_packages()
     packages.pop(code, None)
     write_packages(packages)
+
+
+def refresh_esim_catalogue_from_panel() -> tuple[bool, str]:
+    import bot
+
+    bot.DATA_DIR = DATA_DIR
+    bot.PACKAGES_FILE = DATA_DIR / "esim_packages.json"
+    bot.ESIMGO_CATALOGUE_CACHE_FILE = DATA_DIR / "esimgo_catalogue_cache.json"
+    bot.ESIMGO_CATALOGUE_CACHE = None
+    try:
+        packages = bot.esimgo_catalogue(force_refresh=True)
+    except Exception as exc:
+        return False, f"eSIM Go katalog yangilanmadi: {exc}"
+    return True, f"eSIM Go katalog yangilandi. Davlatlar: {len(packages)}"
 
 
 def export_page():
@@ -2000,6 +2019,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(303)
             self.send_header("Location", "/packages")
             self.end_headers()
+            return
+        if path == "/refresh-esim":
+            ok, message = refresh_esim_catalogue_from_panel()
+            self.send_html(packages_page(message=message if ok else "", error="" if ok else message))
             return
         self.send_response(404)
         self.end_headers()

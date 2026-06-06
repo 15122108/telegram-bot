@@ -1313,6 +1313,10 @@ def is_admin_chat(chat_id: int | None) -> bool:
     return bool(admin_chat_id and chat_id is not None and str(chat_id) == admin_chat_id)
 
 
+def admin_bot_commands_enabled() -> bool:
+    return os.environ.get("ADMIN_BOT_COMMANDS", "0").strip() == "1"
+
+
 def help_text(lang: str = DEFAULT_LANG) -> str:
     if lang == "ru":
         return (
@@ -1655,6 +1659,21 @@ def build_reply(token: str, message: dict) -> tuple[str, dict | None]:
             lang,
         )
         return order_text, main_menu(lang)
+
+    admin_commands = (
+        "/stats",
+        "/orders",
+        "/refresh_esim",
+        "/fulfill",
+        "/done",
+        "/cancel",
+        "/reply",
+    )
+    if text.startswith(admin_commands) and is_admin_chat(message.get("chat", {}).get("id")) and not admin_bot_commands_enabled():
+        return (
+            "Admin boshqaruv faqat admin panelda bajariladi. Paneldan Buyurtmalar, Support, Broadcast va Sozlamalar bo'limlarini ishlating.",
+            main_menu(lang),
+        )
 
     if text.startswith("/stats"):
         if not is_admin_chat(message.get("chat", {}).get("id")):

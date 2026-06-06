@@ -24,6 +24,7 @@ TELEGRAM_BOT_TOKEN=
 ADMIN_CHAT_ID=
 ADMIN_USERNAME=
 ADMIN_TELEGRAM_NOTIFICATIONS=0
+ADMIN_BOT_COMMANDS=0
 ADMIN_PANEL_PASSWORD=
 ADMIN_PANEL_SECRET=
 ESIMGO_API_KEY=
@@ -37,6 +38,8 @@ CARD_PAYMENT_NOTE=
 `ALLOW_MANUAL_ESIM_FALLBACK=0` is real mode. The bot only uses eSIM Go catalogue/products and will not sell local demo packages if the provider API is unavailable.
 
 `ADMIN_TELEGRAM_NOTIFICATIONS=0` keeps support/order management inside the admin panel. Set it to `1` only if you also want admin Telegram chat alerts.
+
+`ADMIN_BOT_COMMANDS=0` keeps admin operations inside the admin panel. Set it to `1` only for emergency Telegram commands.
 
 ## Order Flow
 
