@@ -622,6 +622,7 @@ def append_conversation_message(
         items = []
     items.append(
         {
+            "id": f"CV-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}",
             "direction": direction,
             "text": text or "",
             "attachment": attachment or {},

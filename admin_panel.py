@@ -1256,16 +1256,26 @@ def user_detail_page(user_id: str):
         )
 
     conversation_rows = []
-    for item in reversed(conversation_messages[-120:]):
+    for index, item in reversed(list(enumerate(conversation_messages[-120:]))):
+        if not isinstance(item, dict):
+            continue
+        item = normalize_conversation_item(item, index)
         direction = item.get("direction") or ""
         direction_label = "Mijoz" if direction == "user" else "Bot/Admin"
         attachment = item.get("attachment") or {}
         file_label = attachment.get("type") or attachment.get("file_name") or ""
+        edited = f"<div class='muted'>Taxrirlangan: {esc(item.get('edited_at'))}</div>" if item.get("edited_at") else ""
         conversation_rows.append(
             f"<tr><td>{esc(item.get('created_at'))}</td>"
             f"<td><span class='badge {esc(direction)}'>{esc(direction_label)}</span></td>"
-            f"<td>{esc(display_text(item.get('text')))}</td>"
-            f"<td>{esc(file_label)}</td></tr>"
+            f"<td>{esc(display_text(item.get('text')))}{edited}</td>"
+            f"<td>{esc(file_label)}</td>"
+            f"<td><form method='post' action='/conversation-edit'>"
+            f"<input type='hidden' name='user_id' value='{esc(user_id)}'>"
+            f"<input type='hidden' name='message_id' value='{esc(item.get('id'))}'>"
+            f"<textarea name='text' required>{esc(item.get('text'))}</textarea>"
+            f"<div style='margin-top:8px'><button>Taxrirlash</button></div>"
+            f"</form></td></tr>"
         )
 
     body = f"""
@@ -1292,7 +1302,7 @@ def user_detail_page(user_id: str):
 <h4>{esc(admin_t('support_questions'))}</h4>
 <table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('status'))}</th><th>{esc(admin_t('question'))}</th><th>{esc(admin_t('file'))}</th><th>{esc(admin_t('answer'))}</th><th>{esc(admin_t('created'))}</th></tr>{''.join(support_rows)}</table>
 <h4>Suhbat tarixi</h4>
-<table><tr><th>{esc(admin_t('created'))}</th><th>Kim</th><th>Xabar</th><th>{esc(admin_t('file'))}</th></tr>{''.join(conversation_rows)}</table>
+<table><tr><th>{esc(admin_t('created'))}</th><th>Kim</th><th>Xabar</th><th>{esc(admin_t('file'))}</th><th>Taxrirlash</th></tr>{''.join(conversation_rows)}</table>
 """
     return layout(f"{admin_t('user')} {user_id}", body)
 
@@ -1777,6 +1787,7 @@ def append_conversation_message(user_id: str, direction: str, text: str) -> None
         items = []
     items.append(
         {
+            "id": f"CV-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}",
             "direction": direction,
             "text": text or "",
             "attachment": {},
@@ -1786,6 +1797,48 @@ def append_conversation_message(user_id: str, direction: str, text: str) -> None
     )
     conversations[key] = items[-500:]
     write_json("conversations.json", conversations)
+
+
+def normalize_conversation_item(item: dict, index: int) -> dict:
+    if "id" not in item:
+        item["id"] = f"legacy-{index}"
+    if "edit_history" not in item or not isinstance(item.get("edit_history"), list):
+        item["edit_history"] = []
+    return item
+
+
+def edit_conversation_message(user_id: str, message_id: str, new_text: str) -> bool:
+    conversations = read_json("conversations.json", {})
+    if not isinstance(conversations, dict):
+        return False
+    key = str(user_id)
+    items = conversations.get(key)
+    if not isinstance(items, list):
+        return False
+    changed = False
+    now = datetime.now(timezone.utc).isoformat()
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        normalize_conversation_item(item, index)
+        if str(item.get("id")) == str(message_id):
+            old_text = item.get("text") or ""
+            item.setdefault("edit_history", []).append(
+                {
+                    "edited_at": now,
+                    "old_text": old_text,
+                    "new_text": new_text,
+                    "edited_by": "admin_panel",
+                }
+            )
+            item["text"] = new_text
+            item["edited_at"] = now
+            changed = True
+            break
+    if changed:
+        conversations[key] = items
+        write_json("conversations.json", conversations)
+    return changed
 
 
 def handle_telegram_webhook(update: dict) -> None:
@@ -2236,6 +2289,16 @@ class Handler(BaseHTTPRequestHandler):
                 mark_support_replied(support_id, text)
             self.send_response(303)
             self.send_header("Location", f"/support?id={support_id}" if support_id else f"/user?id={user_id}")
+            self.end_headers()
+            return
+        if path == "/conversation-edit":
+            user_id = params.get("user_id", [""])[0]
+            message_id = params.get("message_id", [""])[0]
+            text = params.get("text", [""])[0].strip()
+            if user_id and message_id:
+                edit_conversation_message(user_id, message_id, text)
+            self.send_response(303)
+            self.send_header("Location", f"/user?id={user_id}")
             self.end_headers()
             return
         if path == "/broadcast":
