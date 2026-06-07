@@ -9,6 +9,47 @@ from urllib.request import urlopen
 import admin_panel
 
 
+def render_base_url() -> str:
+    return os.environ.get("WEBHOOK_BASE_URL") or os.environ.get("RENDER_EXTERNAL_URL") or ""
+
+
+def webhook_mode_enabled() -> bool:
+    value = os.environ.get("TELEGRAM_WEBHOOK_MODE", "auto").strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    return bool(render_base_url())
+
+
+def telegram_api(method: str, payload: dict | None = None) -> None:
+    import bot
+
+    token = os.environ.get("TELEGRAM_BOT_TOKEN") or admin_panel.read_env("TELEGRAM_BOT_TOKEN")
+    if not token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN topilmadi")
+    bot.telegram_request(token, method, payload or {}, timeout=20)
+
+
+def configure_webhook() -> None:
+    if not webhook_mode_enabled():
+        return
+    base_url = render_base_url().rstrip("/")
+    path = admin_panel.webhook_path()
+    if not base_url or not path:
+        raise RuntimeError("WEBHOOK_BASE_URL/RENDER_EXTERNAL_URL yoki TELEGRAM_WEBHOOK_SECRET topilmadi")
+    url = base_url + path
+    telegram_api(
+        "setWebhook",
+        {
+            "url": url,
+            "allowed_updates": ["message", "edited_message", "callback_query"],
+            "drop_pending_updates": False,
+        },
+    )
+    print(f"Telegram webhook enabled: {base_url}/telegram-webhook/***", flush=True)
+
+
 def main() -> None:
     stop_event = threading.Event()
     process_lock = threading.Lock()
@@ -54,7 +95,11 @@ def main() -> None:
             except Exception as exc:
                 print(f"Keepalive ping failed: {exc}", flush=True)
 
-    threading.Thread(target=bot_watchdog, daemon=True).start()
+    if webhook_mode_enabled():
+        configure_webhook()
+    else:
+        telegram_api("deleteWebhook", {"drop_pending_updates": False})
+        threading.Thread(target=bot_watchdog, daemon=True).start()
     threading.Thread(target=keepalive_loop, daemon=True).start()
 
     def shutdown(signum, frame) -> None:

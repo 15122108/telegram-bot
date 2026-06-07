@@ -667,6 +667,21 @@ def session_secret() -> str:
     return str(config.get("session_secret") or read_env("ADMIN_PANEL_SECRET", admin_password()))
 
 
+def webhook_secret() -> str:
+    secret = read_env("TELEGRAM_WEBHOOK_SECRET", session_secret())
+    if secret:
+        return secret
+    token = read_env("TELEGRAM_BOT_TOKEN")
+    if token:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()[:32]
+    return ""
+
+
+def webhook_path() -> str:
+    secret = webhook_secret()
+    return f"/telegram-webhook/{secret}" if secret else ""
+
+
 def set_admin_password(new_password: str) -> None:
     config = admin_config()
     config["password_hash"] = hash_admin_password(new_password)
@@ -1773,6 +1788,24 @@ def append_conversation_message(user_id: str, direction: str, text: str) -> None
     write_json("conversations.json", conversations)
 
 
+def handle_telegram_webhook(update: dict) -> None:
+    import bot
+
+    token = read_env("TELEGRAM_BOT_TOKEN")
+    if not token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN topilmadi")
+    bot.DATA_DIR = DATA_DIR
+    bot.ORDERS_FILE = DATA_DIR / "orders.json"
+    bot.USERS_FILE = DATA_DIR / "users.json"
+    bot.REMINDERS_FILE = DATA_DIR / "reminders.json"
+    bot.STATES_FILE = DATA_DIR / "states.json"
+    bot.SUPPORT_FILE = DATA_DIR / "support_messages.json"
+    bot.CONVERSATIONS_FILE = DATA_DIR / "conversations.json"
+    bot.PACKAGES_FILE = DATA_DIR / "esim_packages.json"
+    bot.ESIMGO_CATALOGUE_CACHE_FILE = DATA_DIR / "esimgo_catalogue_cache.json"
+    bot.handle_update(token, update)
+
+
 def telegram_multipart(method: str, fields: dict[str, str], file_field: str, filename: str, content_type: str, file_bytes: bytes) -> None:
     token = read_env("TELEGRAM_BOT_TOKEN")
     if not token:
@@ -2131,6 +2164,26 @@ class Handler(BaseHTTPRequestHandler):
         CURRENT_ADMIN_LANG = self.current_lang()
         path = urlparse(self.path).path
         content_type = self.headers.get("Content-Type", "")
+        if path == webhook_path():
+            length = int(self.headers.get("Content-Length", "0"))
+            try:
+                update = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                handle_telegram_webhook(update)
+                data = b"ok"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception as exc:
+                print(f"Telegram webhook xatosi: {exc}", flush=True)
+                data = b"error"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            return
         is_multipart_broadcast = path == "/broadcast" and content_type.startswith("multipart/form-data")
         params = {}
         if not is_multipart_broadcast:

@@ -8,6 +8,9 @@ Render Free web service 15 daqiqa inbound traffic bo'lmasa uxlaydi. Uyg'onganda 
 
 - Render paid instance yoki VPS ishlating.
 - `Health Check Path` qiymati: `/health`.
+- Renderda bot webhook rejimida ishlaydi: Telegram xabari `https://YOUR-SERVICE.onrender.com/telegram-webhook/...` ga inbound request yuboradi. Bu Free service uxlagan bo'lsa ham xabar kelganda uyg'otadi.
+- `TELEGRAM_WEBHOOK_MODE=auto` qoldiring yoki `1` qiling.
+- `TELEGRAM_WEBHOOK_SECRET` uchun uzun maxfiy matn qo'ying. Bo'sh bo'lsa `ADMIN_PANEL_SECRET` ishlatiladi.
 - `KEEPALIVE_ENABLED=1` va `KEEPALIVE_INTERVAL_SECONDS=600` qo'ying.
 - Render Free ishlatilsa, tashqi monitoring xizmatida `https://YOUR-SERVICE.onrender.com/health` manziliga 5-10 daqiqada bir ping sozlang.
 - JSON data yo'qolmasligi uchun persistent disk yoki database ishlating. Render Free web service local fayllarni restart/redeploy/spin-down paytida saqlab qolmaydi.
