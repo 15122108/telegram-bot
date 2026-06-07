@@ -1075,21 +1075,9 @@ def flight_prompt(step_index: int, lang: str = DEFAULT_LANG) -> str:
 
 
 def start_flight_state(user: dict, lang: str = DEFAULT_LANG) -> tuple[str, dict]:
-    set_user_state(
-        user.get("id"),
-        {
-            "type": "flight_order",
-            "step": 0,
-            "data": {},
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        },
-    )
-    intro = {
-        "uz": "Avia bilet so'rovi. Real chipta narxini admin tekshiradi va sizga taklif yuboradi.\n\n",
-        "ru": "Заявка на авиабилет. Админ проверит реальную цену и отправит предложение.\n\n",
-        "en": "Flight ticket request. Admin will check the real fare and send an offer.\n\n",
-    }.get(lang, "")
-    return intro + flight_prompt(0, lang), None
+    if flight_api_mode() == "api":
+        return start_flight_api_route_selection(user, lang)
+    return start_flight_manual_state(user, lang)
 
 
 def validate_flight_step(field: str, value: str, lang: str) -> tuple[bool, str]:
@@ -1216,6 +1204,237 @@ def flight_api_request(path_env: str, default_path: str, payload: dict) -> dict:
         return json.loads(raw) if raw else {}
     except json.JSONDecodeError:
         return {"raw_response": raw}
+
+
+def option_value(item) -> str:
+    if isinstance(item, str):
+        return item.strip()
+    if isinstance(item, dict):
+        for key in ("code", "iata", "id", "value", "city", "name", "date"):
+            value = item.get(key)
+            if value:
+                return str(value).strip()
+    return ""
+
+
+def option_label(item) -> str:
+    if isinstance(item, str):
+        return item.strip()
+    if isinstance(item, dict):
+        code = item.get("code") or item.get("iata") or item.get("id") or item.get("date") or ""
+        name = item.get("name") or item.get("city") or item.get("label") or item.get("value") or ""
+        if code and name and str(code) != str(name):
+            return f"{name} ({code})"
+        return str(name or code).strip()
+    return ""
+
+
+def normalize_flight_options(items) -> list[dict]:
+    if not isinstance(items, list):
+        return []
+    options = []
+    seen = set()
+    for item in items[:60]:
+        value = option_value(item)
+        label = option_label(item)
+        if not value or not label or value in seen:
+            continue
+        seen.add(value)
+        options.append({"value": value, "label": label, "raw": item})
+    return options
+
+
+def extract_flight_options(response: dict, kind: str) -> list[dict]:
+    candidates = None
+    if kind == "origin":
+        keys = ("origins", "from", "cities", "airports", "locations")
+    elif kind == "destination":
+        keys = ("destinations", "to", "cities", "airports", "locations")
+    else:
+        keys = ("dates", "depart_dates", "available_dates", "days")
+    for key in keys:
+        if isinstance(response.get(key), list):
+            candidates = response.get(key)
+            break
+    data = response.get("data")
+    if candidates is None and isinstance(data, dict):
+        for key in keys:
+            if isinstance(data.get(key), list):
+                candidates = data.get(key)
+                break
+    if candidates is None and isinstance(data, list):
+        candidates = data
+    if candidates is None and kind in {"origin", "destination"} and isinstance(response.get("routes"), list):
+        route_key = "from" if kind == "origin" else "to"
+        candidates = [
+            route.get(route_key)
+            for route in response["routes"]
+            if isinstance(route, dict) and route.get(route_key)
+        ]
+    return normalize_flight_options(candidates)
+
+
+def fetch_flight_origins() -> list[dict]:
+    response = flight_api_request("FLIGHT_API_ROUTES_PATH", "/routes", {})
+    return extract_flight_options(response, "origin")
+
+
+def fetch_flight_destinations(origin: str) -> list[dict]:
+    response = flight_api_request("FLIGHT_API_ROUTES_PATH", "/routes", {"from": origin})
+    return extract_flight_options(response, "destination")
+
+
+def fetch_flight_dates(origin: str, destination: str) -> list[dict]:
+    response = flight_api_request(
+        "FLIGHT_API_DATES_PATH",
+        "/dates",
+        {"from": origin, "to": destination},
+    )
+    return extract_flight_options(response, "date")
+
+
+def flight_options_menu(kind: str, options: list[dict], lang: str = DEFAULT_LANG) -> dict:
+    prefix = {"origin": "flight_origin", "destination": "flight_dest", "date": "flight_date"}[kind]
+    buttons = [(option["label"][:55], f"{prefix}:{index}") for index, option in enumerate(options[:40])]
+    buttons.append((t(lang, "back_main"), "menu:main"))
+    return inline_menu(buttons)
+
+
+def flight_route_prompt(kind: str, lang: str = DEFAULT_LANG) -> str:
+    prompts = {
+        "origin": {
+            "uz": "Qayerdan uchishni tanlang:",
+            "ru": "Выберите город вылета:",
+            "en": "Choose departure city:",
+        },
+        "destination": {
+            "uz": "Qaysi yo'nalishga borishni tanlang:",
+            "ru": "Выберите направление:",
+            "en": "Choose destination:",
+        },
+        "date": {
+            "uz": "Bu yo'nalishda bilet bor kunlarni tanlang:",
+            "ru": "Выберите доступную дату:",
+            "en": "Choose an available date:",
+        },
+    }
+    return prompts[kind].get(lang, prompts[kind][DEFAULT_LANG])
+
+
+def start_flight_api_route_selection(user: dict, lang: str = DEFAULT_LANG) -> tuple[str, dict | None]:
+    try:
+        origins = fetch_flight_origins()
+    except Exception as exc:
+        print(f"Flight routes error: {exc}")
+        origins = []
+    if not origins:
+        return start_flight_manual_state(user, lang)
+    set_user_state(
+        user.get("id"),
+        {
+            "type": "flight_route_select",
+            "kind": "origin",
+            "data": {},
+            "options": origins,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    return flight_route_prompt("origin", lang), flight_options_menu("origin", origins, lang)
+
+
+def start_flight_manual_state(user: dict, lang: str = DEFAULT_LANG) -> tuple[str, dict]:
+    set_user_state(
+        user.get("id"),
+        {
+            "type": "flight_order",
+            "step": 0,
+            "data": {},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    intro = {
+        "uz": "Avia bilet so'rovi. Real chipta narxini admin tekshiradi va sizga taklif yuboradi.\n\n",
+        "ru": "Заявка на авиабилет. Админ проверит реальную цену и отправит предложение.\n\n",
+        "en": "Flight ticket request. Admin will check the real fare and send an offer.\n\n",
+    }.get(lang, "")
+    return intro + flight_prompt(0, lang), None
+
+
+def continue_flight_manual_state(user: dict, data: dict, step: int, lang: str) -> tuple[str, dict | None]:
+    set_user_state(
+        user.get("id"),
+        {
+            "type": "flight_order",
+            "step": step,
+            "data": data,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    return flight_prompt(step, lang), None
+
+
+def handle_flight_route_callback(user: dict, callback_data: str, lang: str) -> tuple[str, dict | None]:
+    state = get_user_state(user.get("id"))
+    if not state or state.get("type") != "flight_route_select":
+        return start_flight_state(user, lang)
+    options = state.get("options") if isinstance(state.get("options"), list) else []
+    try:
+        index = int(callback_data.split(":", 1)[1])
+    except (TypeError, ValueError):
+        index = -1
+    if index < 0 or index >= len(options):
+        return "Bu variant topilmadi. Qaytadan tanlang.", main_menu(lang)
+    selected = options[index]
+    data = state.get("data") if isinstance(state.get("data"), dict) else {}
+    data = dict(data)
+
+    if callback_data.startswith("flight_origin:"):
+        data["from_city"] = selected["value"]
+        try:
+            destinations = fetch_flight_destinations(selected["value"])
+        except Exception as exc:
+            print(f"Flight destinations error: {exc}")
+            destinations = []
+        if not destinations:
+            return continue_flight_manual_state(user, data, 1, lang)
+        set_user_state(
+            user.get("id"),
+            {
+                "type": "flight_route_select",
+                "kind": "destination",
+                "data": data,
+                "options": destinations,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        return flight_route_prompt("destination", lang), flight_options_menu("destination", destinations, lang)
+
+    if callback_data.startswith("flight_dest:"):
+        data["to_city"] = selected["value"]
+        try:
+            dates = fetch_flight_dates(data.get("from_city", ""), selected["value"])
+        except Exception as exc:
+            print(f"Flight dates error: {exc}")
+            dates = []
+        if not dates:
+            return continue_flight_manual_state(user, data, 2, lang)
+        set_user_state(
+            user.get("id"),
+            {
+                "type": "flight_route_select",
+                "kind": "date",
+                "data": data,
+                "options": dates,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        return flight_route_prompt("date", lang), flight_options_menu("date", dates, lang)
+
+    if callback_data.startswith("flight_date:"):
+        data["depart_date"] = selected["value"]
+        return continue_flight_manual_state(user, data, 3, lang)
+
+    return start_flight_state(user, lang)
 
 
 def extract_flight_offers(response: dict) -> list[dict]:
@@ -2371,6 +2590,9 @@ def build_callback_reply(token: str, callback_query: dict) -> tuple[str, dict | 
             lang,
         )
         return order_text, main_menu(lang)
+
+    if data.startswith(("flight_origin:", "flight_dest:", "flight_date:")):
+        return handle_flight_route_callback(user, data, lang)
 
     if data.startswith("flight_buy:"):
         state = get_user_state(user.get("id"))

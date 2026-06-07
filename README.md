@@ -37,6 +37,8 @@ FLIGHT_MARKUP_PERCENT=10
 FLIGHT_CURRENCY=USD
 FLIGHT_API_PROVIDER=
 FLIGHT_API_BASE=
+FLIGHT_API_ROUTES_PATH=/routes
+FLIGHT_API_DATES_PATH=/dates
 FLIGHT_API_SEARCH_PATH=/search
 FLIGHT_API_BOOKING_PATH=/bookings
 FLIGHT_API_KEY=
@@ -67,12 +69,13 @@ The bot creates a real eSIM through eSIM Go and sends installation details to th
 ## Flight Ticket Flow
 
 1. Customer opens `Avia biletlar` and sends route, dates, passenger count, and contact.
-2. If `FLIGHT_PROVIDER_MODE=api`, the bot requests real flight offers from `FLIGHT_API_SEARCH_PATH`, adds `FLIGHT_MARKUP_PERCENT`, and shows customer-facing prices in Telegram.
-3. Customer selects a ticket offer and pays to the owner card/QR account shown by the bot.
-4. Admin confirms the card/QR payment in the panel.
-5. If flight API is configured, admin can run automatic booking/issue from the panel. Otherwise admin sends PNR, ticket number, ticket URL, or ticket PDF/image manually.
+2. If `FLIGHT_PROVIDER_MODE=api`, the bot shows available departure cities from `FLIGHT_API_ROUTES_PATH`, then destinations for that route, then available ticket dates from `FLIGHT_API_DATES_PATH`.
+3. After the customer selects a route/date, the bot requests real flight offers from `FLIGHT_API_SEARCH_PATH`, adds `FLIGHT_MARKUP_PERCENT`, and shows customer-facing prices in Telegram.
+4. Customer selects a ticket offer and pays to the owner card/QR account shown by the bot.
+5. Admin confirms the card/QR payment in the panel.
+6. If flight API is configured, admin can run automatic booking/issue from the panel. Otherwise admin sends PNR, ticket number, ticket URL, or ticket PDF/image manually.
 
-`FLIGHT_PROVIDER_MODE=manual` is the default. Real ticket API automation can be connected later through `FLIGHT_API_PROVIDER`, `FLIGHT_API_BASE`, `FLIGHT_API_SEARCH_PATH`, `FLIGHT_API_BOOKING_PATH`, and `FLIGHT_API_KEY`.
+`FLIGHT_PROVIDER_MODE=manual` is the default. Real ticket API automation can be connected later through `FLIGHT_API_PROVIDER`, `FLIGHT_API_BASE`, `FLIGHT_API_ROUTES_PATH`, `FLIGHT_API_DATES_PATH`, `FLIGHT_API_SEARCH_PATH`, `FLIGHT_API_BOOKING_PATH`, and `FLIGHT_API_KEY`.
 
 ## Local Run
 
