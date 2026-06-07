@@ -33,8 +33,11 @@ ESIMGO_API_BASE=https://api.esim-go.com/v2.4
 ESIM_MARKUP_PERCENT=30
 ALLOW_MANUAL_ESIM_FALLBACK=0
 FLIGHT_PROVIDER_MODE=manual
+FLIGHT_MARKUP_PERCENT=10
+FLIGHT_CURRENCY=USD
 FLIGHT_API_PROVIDER=
 FLIGHT_API_BASE=
+FLIGHT_API_SEARCH_PATH=/search
 FLIGHT_API_BOOKING_PATH=/bookings
 FLIGHT_API_KEY=
 CARD_QR_IMAGE=payment_qr.png
@@ -64,12 +67,12 @@ The bot creates a real eSIM through eSIM Go and sends installation details to th
 ## Flight Ticket Flow
 
 1. Customer opens `Avia biletlar` and sends route, dates, passenger count, and contact.
-2. Admin opens `Avia buyurtmalar` in the admin panel.
-3. Admin checks a real ticket source, sets price, and sends the offer with QR/card payment instructions.
-4. Money goes to the owner card/QR account, then admin confirms payment in the panel.
+2. If `FLIGHT_PROVIDER_MODE=api`, the bot requests real flight offers from `FLIGHT_API_SEARCH_PATH`, adds `FLIGHT_MARKUP_PERCENT`, and shows customer-facing prices in Telegram.
+3. Customer selects a ticket offer and pays to the owner card/QR account shown by the bot.
+4. Admin confirms the card/QR payment in the panel.
 5. If flight API is configured, admin can run automatic booking/issue from the panel. Otherwise admin sends PNR, ticket number, ticket URL, or ticket PDF/image manually.
 
-`FLIGHT_PROVIDER_MODE=manual` is the default. Real ticket API automation can be connected later through `FLIGHT_API_PROVIDER`, `FLIGHT_API_BASE`, `FLIGHT_API_BOOKING_PATH`, and `FLIGHT_API_KEY`.
+`FLIGHT_PROVIDER_MODE=manual` is the default. Real ticket API automation can be connected later through `FLIGHT_API_PROVIDER`, `FLIGHT_API_BASE`, `FLIGHT_API_SEARCH_PATH`, `FLIGHT_API_BOOKING_PATH`, and `FLIGHT_API_KEY`.
 
 ## Local Run
 

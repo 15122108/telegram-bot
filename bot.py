@@ -1133,11 +1133,15 @@ def validate_flight_step(field: str, value: str, lang: str) -> tuple[bool, str]:
 def create_flight_order(user: dict, data: dict) -> dict:
     orders = read_flight_orders()
     now = datetime.now(timezone.utc).isoformat()
+    selected_offer = data.get("selected_offer") if isinstance(data.get("selected_offer"), dict) else {}
+    cost = float(selected_offer.get("cost") or 0)
+    price = float(selected_offer.get("price") or 0)
+    currency = selected_offer.get("currency") or read_env_safe("FLIGHT_CURRENCY", "USD")
     order = {
         "id": next_flight_order_id(orders),
         "created_at": now,
         "updated_at": now,
-        "status": "new",
+        "status": "pending_payment" if selected_offer else "new",
         "user_id": user.get("id"),
         "username": user.get("username"),
         "first_name": user.get("first_name"),
@@ -1148,9 +1152,13 @@ def create_flight_order(user: dict, data: dict) -> dict:
         "passengers": data.get("passengers", "1"),
         "contact": data.get("contact", ""),
         "comment": "" if data.get("comment") in {"-", "yo'q", "нет", "no"} else data.get("comment", ""),
-        "currency": "USD",
-        "price": "",
+        "currency": currency,
+        "price": price or "",
+        "cost": cost or "",
+        "profit": round(price - cost, 2) if price and cost else "",
         "provider": read_env_safe("FLIGHT_API_PROVIDER", "manual"),
+        "offer_id": selected_offer.get("id", ""),
+        "selected_offer": selected_offer,
         "payment_method": "manual_qr_until_merchant_connected",
     }
     orders.append(order)
@@ -1159,10 +1167,183 @@ def create_flight_order(user: dict, data: dict) -> dict:
 
 
 def read_env_safe(name: str, default: str = "") -> str:
+    load_env_file(Path(__file__).with_name(".env"))
     return os.environ.get(name, default).strip() or default
 
 
+def flight_api_mode() -> str:
+    return read_env_safe("FLIGHT_PROVIDER_MODE", "manual").lower()
+
+
+def flight_markup_percent() -> float:
+    try:
+        return max(0.0, float(read_env_safe("FLIGHT_MARKUP_PERCENT", "10")))
+    except ValueError:
+        return 10.0
+
+
+def flight_price_with_markup(cost: float) -> float:
+    return round(cost * (1 + flight_markup_percent() / 100), 2)
+
+
+def flight_api_endpoint(path_env: str, default_path: str) -> str:
+    base = read_env_safe("FLIGHT_API_BASE", "").rstrip("/")
+    path = read_env_safe(path_env, default_path) or default_path
+    if not base:
+        return ""
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    return base + (path if path.startswith("/") else f"/{path}")
+
+
+def flight_api_request(path_env: str, default_path: str, payload: dict) -> dict:
+    endpoint = flight_api_endpoint(path_env, default_path)
+    api_key = read_env_safe("FLIGHT_API_KEY", "")
+    if not endpoint or not api_key:
+        raise RuntimeError("FLIGHT_API_BASE yoki FLIGHT_API_KEY sozlanmagan")
+    request = urllib.request.Request(
+        endpoint,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        raw = response.read().decode("utf-8", "ignore")
+    try:
+        return json.loads(raw) if raw else {}
+    except json.JSONDecodeError:
+        return {"raw_response": raw}
+
+
+def extract_flight_offers(response: dict) -> list[dict]:
+    candidates = response.get("offers") or response.get("flights") or response.get("results")
+    if isinstance(response.get("data"), dict):
+        candidates = candidates or response["data"].get("offers") or response["data"].get("flights")
+    if isinstance(response.get("data"), list):
+        candidates = candidates or response.get("data")
+    if not isinstance(candidates, list):
+        return []
+    offers = []
+    for index, item in enumerate(candidates[:8]):
+        if not isinstance(item, dict):
+            continue
+        price_data = item.get("price") if isinstance(item.get("price"), dict) else {}
+        raw_cost = (
+            item.get("cost")
+            or item.get("cost_usd")
+            or item.get("amount")
+            or item.get("total")
+            or price_data.get("amount")
+            or price_data.get("total")
+        )
+        try:
+            cost = float(raw_cost)
+        except (TypeError, ValueError):
+            continue
+        currency = str(item.get("currency") or price_data.get("currency") or "USD").upper()
+        airline = item.get("airline") or item.get("carrier") or item.get("provider") or "Flight"
+        depart_time = item.get("depart_time") or item.get("departure_time") or item.get("departure") or ""
+        arrive_time = item.get("arrive_time") or item.get("arrival_time") or item.get("arrival") or ""
+        baggage = item.get("baggage") or item.get("included_baggage") or ""
+        offer_id = str(item.get("id") or item.get("offer_id") or item.get("token") or f"offer-{index}")
+        sell_price = flight_price_with_markup(cost)
+        offers.append(
+            {
+                "id": offer_id,
+                "airline": str(airline),
+                "depart_time": str(depart_time),
+                "arrive_time": str(arrive_time),
+                "baggage": str(baggage),
+                "cost": cost,
+                "currency": currency,
+                "price": sell_price,
+                "profit": round(sell_price - cost, 2),
+                "raw": item,
+            }
+        )
+    return offers
+
+
+def search_flight_offers(data: dict) -> list[dict]:
+    payload = {
+        "from": data.get("from_city"),
+        "to": data.get("to_city"),
+        "depart_date": data.get("depart_date"),
+        "return_date": "" if data.get("return_date") in {"-", "yo'q", "нет", "no"} else data.get("return_date", ""),
+        "passengers": int(data.get("passengers") or 1),
+        "currency": read_env_safe("FLIGHT_CURRENCY", "USD"),
+    }
+    response = flight_api_request("FLIGHT_API_SEARCH_PATH", "/search", payload)
+    return extract_flight_offers(response)
+
+
+def flight_offer_menu(offers: list[dict], lang: str = DEFAULT_LANG) -> dict:
+    buttons = []
+    for index, offer in enumerate(offers[:8]):
+        label = (
+            f"{offer.get('airline')} {offer.get('depart_time') or ''} "
+            f"{offer.get('price')} {offer.get('currency')}"
+        ).strip()[:60]
+        buttons.append((label, f"flight_buy:{index}"))
+    buttons.append((t(lang, "back_main"), "menu:main"))
+    return inline_menu(buttons)
+
+
+def flight_offers_text(data: dict, offers: list[dict], lang: str = DEFAULT_LANG) -> str:
+    route = f"{data.get('from_city')} -> {data.get('to_city')}"
+    if lang == "ru":
+        intro = f"Найдены реальные варианты: {route}\nВыберите билет:"
+    elif lang == "en":
+        intro = f"Real flight options found: {route}\nChoose a ticket:"
+    else:
+        intro = f"Real avia bilet variantlari topildi: {route}\nKeraklisini tanlang:"
+    lines = [intro]
+    for index, offer in enumerate(offers[:8], start=1):
+        time_part = " - ".join(part for part in [offer.get("depart_time"), offer.get("arrive_time")] if part)
+        baggage = f", bagaj: {offer.get('baggage')}" if offer.get("baggage") else ""
+        lines.append(
+            f"{index}. {offer.get('airline')} {time_part}{baggage} - "
+            f"{offer.get('price')} {offer.get('currency')}"
+        )
+    lines.append(f"\nUstama: {flight_markup_percent():.0f}%. To'lov sizning karta/QR orqali qabul qilinadi.")
+    return "\n".join(lines)
+
+
 def format_flight_order_for_customer(order: dict, lang: str = DEFAULT_LANG) -> str:
+    if order.get("price"):
+        price_line = f"{order.get('price')} {order.get('currency') or 'USD'}"
+        if lang == "ru":
+            return (
+                f"Заказ на авиабилет #{order['id']} создан.\n"
+                f"Маршрут: {order.get('from_city')} -> {order.get('to_city')}\n"
+                f"Вылет: {order.get('depart_date')}\n"
+                f"Возврат: {order.get('return_date') or 'one-way'}\n"
+                f"Пассажиры: {order.get('passengers')}\n"
+                f"Цена: {price_line}\n\n"
+                "Оплатите через QR/карту ниже. После оплаты отправьте чек в этот чат."
+            )
+        if lang == "en":
+            return (
+                f"Flight order #{order['id']} created.\n"
+                f"Route: {order.get('from_city')} -> {order.get('to_city')}\n"
+                f"Departure: {order.get('depart_date')}\n"
+                f"Return: {order.get('return_date') or 'one-way'}\n"
+                f"Passengers: {order.get('passengers')}\n"
+                f"Price: {price_line}\n\n"
+                "Pay using the QR/card below. After payment, send the receipt to this chat."
+            )
+        return (
+            f"Avia bilet buyurtma #{order['id']} yaratildi.\n"
+            f"Yo'nalish: {order.get('from_city')} -> {order.get('to_city')}\n"
+            f"Uchish: {order.get('depart_date')}\n"
+            f"Qaytish: {order.get('return_date') or 'bir tomonga'}\n"
+            f"Yo'lovchi: {order.get('passengers')}\n"
+            f"Narx: {price_line}\n\n"
+            "To'lovni pastdagi QR/karta orqali qiling. To'lovdan keyin chekni shu chatga yuboring."
+        )
     if lang == "ru":
         return (
             f"Заявка #{order['id']} принята.\n"
@@ -1209,6 +1390,23 @@ def handle_flight_state(user: dict, state: dict, text: str, lang: str) -> tuple[
         set_user_state(user.get("id"), state)
         return flight_prompt(next_step, lang), None
     set_user_state(user.get("id"), None)
+    if flight_api_mode() == "api":
+        try:
+            offers = search_flight_offers(data)
+        except Exception as exc:
+            print(f"Flight search error: {exc}")
+            offers = []
+        if offers:
+            set_user_state(
+                user.get("id"),
+                {
+                    "type": "flight_offer_select",
+                    "data": data,
+                    "offers": offers,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            return flight_offers_text(data, offers, lang), flight_offer_menu(offers, lang)
     order = create_flight_order(user, data)
     append_conversation_message(
         user.get("id"),
@@ -1481,7 +1679,7 @@ def build_order_response(
 
 
 def extract_order_id(text: str) -> str | None:
-    match = re.search(r"\bVE-\d{8}-\d{4}\b", text or "")
+    match = re.search(r"\b(?:VE|AV)-\d{8}-\d{4}\b", text or "")
     return match.group(0) if match else None
 
 
@@ -2173,6 +2371,25 @@ def build_callback_reply(token: str, callback_query: dict) -> tuple[str, dict | 
             lang,
         )
         return order_text, main_menu(lang)
+
+    if data.startswith("flight_buy:"):
+        state = get_user_state(user.get("id"))
+        if not state or state.get("type") != "flight_offer_select":
+            return start_flight_state(user, lang)
+        try:
+            index = int(data.split(":", 1)[1])
+        except (TypeError, ValueError):
+            index = -1
+        offers = state.get("offers") if isinstance(state.get("offers"), list) else []
+        if index < 0 or index >= len(offers):
+            return "Bu avia taklif topilmadi. Qaytadan qidirib ko'ring.", main_menu(lang)
+        order_data = state.get("data") if isinstance(state.get("data"), dict) else {}
+        order_data = dict(order_data)
+        order_data["selected_offer"] = offers[index]
+        set_user_state(user.get("id"), None)
+        order = create_flight_order(user, order_data)
+        append_conversation_message(user.get("id"), "bot", f"Flight order created: {order.get('id')}")
+        return format_flight_order_for_customer(order, lang), main_menu(lang)
 
     return t(lang, "main"), main_menu(lang)
 

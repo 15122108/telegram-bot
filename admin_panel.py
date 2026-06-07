@@ -1295,6 +1295,8 @@ def request_flight_booking(order: dict) -> tuple[bool, str, dict]:
             "first_name": order.get("first_name"),
         },
         "comment": order.get("comment"),
+        "selected_offer": order.get("selected_offer") or {},
+        "offer_id": order.get("offer_id") or "",
     }
     request = Request(
         endpoint,
@@ -1371,7 +1373,8 @@ def flight_orders_page(selected_id: str = "", message: str = "", error: str = ""
             f"<td><a href='/user?id={esc(order.get('user_id'))}'>{esc(order.get('username') or order.get('user_id'))}</a></td>"
             f"<td>{esc(order.get('from_city'))}</td><td>{esc(order.get('to_city'))}</td>"
             f"<td>{esc(order.get('depart_date'))} / {esc(order.get('return_date') or '-')}</td>"
-            f"<td>{esc(order.get('passengers'))}</td><td>{esc(order.get('price'))} {esc(order.get('currency') or '')}</td>"
+            f"<td>{esc(order.get('passengers'))}</td><td>{esc(order.get('price'))} {esc(order.get('currency') or '')}<br>"
+            f"<span class='muted'>cost: {esc(order.get('cost'))}, profit: {esc(order.get('profit'))}</span></td>"
             f"<td><span class='badge {esc(order.get('status'))}'>{esc(order.get('status'))}</span></td>"
             f"<td>{esc(order.get('created_at'))}</td></tr>"
         )
@@ -1387,6 +1390,7 @@ def flight_orders_page(selected_id: str = "", message: str = "", error: str = ""
   <p><b>{esc(admin_t('flight_dates'))}:</b> {esc(selected.get('depart_date'))} / {esc(selected.get('return_date') or '-')}</p>
   <p><b>{esc(admin_t('passengers'))}:</b> {esc(selected.get('passengers'))}</p>
   <p><b>{esc(admin_t('contact'))}:</b> {esc(selected.get('contact'))}</p>
+  <p><b>{esc(admin_t('price'))}:</b> {esc(selected.get('price'))} {esc(selected.get('currency') or '')} | <b>{esc(admin_t('cost'))}:</b> {esc(selected.get('cost'))} | <b>{esc(admin_t('profit'))}:</b> {esc(selected.get('profit'))}</p>
   <p><b>Izoh:</b> {esc(selected.get('comment'))}</p>
   <form method="post" action="/flight-offer">
     <input type="hidden" name="id" value="{esc(selected.get('id'))}">
@@ -1939,8 +1943,11 @@ def settings_page(message: str = "", error: str = "", password_hash: str = ""):
         ("ESIMGO_API_BASE", admin_t("esimgo_api_base")),
         ("ESIM_MARKUP_PERCENT", admin_t("esim_markup_percent")),
         ("FLIGHT_PROVIDER_MODE", "Avia provider rejimi (manual/api)"),
+        ("FLIGHT_MARKUP_PERCENT", "Avia ustama foizi"),
+        ("FLIGHT_CURRENCY", "Avia valyuta"),
         ("FLIGHT_API_PROVIDER", "Avia API provider"),
         ("FLIGHT_API_BASE", "Avia API base URL"),
+        ("FLIGHT_API_SEARCH_PATH", "Avia search endpoint path"),
         ("FLIGHT_API_BOOKING_PATH", "Avia booking endpoint path"),
         ("FLIGHT_API_KEY", "Avia API key"),
     ]
@@ -2010,8 +2017,11 @@ def update_bot_settings(params: dict) -> None:
         "ESIMGO_API_BASE",
         "ESIM_MARKUP_PERCENT",
         "FLIGHT_PROVIDER_MODE",
+        "FLIGHT_MARKUP_PERCENT",
+        "FLIGHT_CURRENCY",
         "FLIGHT_API_PROVIDER",
         "FLIGHT_API_BASE",
+        "FLIGHT_API_SEARCH_PATH",
         "FLIGHT_API_BOOKING_PATH",
         "FLIGHT_API_KEY",
     ]
