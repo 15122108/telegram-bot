@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .env
 orders.json
+flight_orders.json
 users.json
 reminders.json
 states.json

@@ -15,6 +15,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("DATA_DIR") or os.environ.get("RAILWAY_VOLUME_MOUNT_PATH") or str(BASE_DIR))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 ORDERS_FILE = DATA_DIR / "orders.json"
+FLIGHT_ORDERS_FILE = DATA_DIR / "flight_orders.json"
 USERS_FILE = DATA_DIR / "users.json"
 REMINDERS_FILE = DATA_DIR / "reminders.json"
 STATES_FILE = DATA_DIR / "states.json"
@@ -36,6 +37,7 @@ TEXT = {
         "visa_free": "Vizasiz davlatlar",
         "visa_check": "Viza muddati",
         "esim": "eSIM paketlar",
+        "flights": "Avia biletlar",
         "help": "Yordam",
         "how": "Qanday ishlaydi",
         "support": "Support",
@@ -57,6 +59,7 @@ TEXT = {
         "visa_free": "Безвизовые страны",
         "visa_check": "Срок визы",
         "esim": "Пакеты eSIM",
+        "flights": "Авиабилеты",
         "help": "Помощь",
         "how": "Как это работает",
         "support": "Поддержка",
@@ -78,6 +81,7 @@ TEXT = {
         "visa_free": "Visa-free countries",
         "visa_check": "Visa expiry",
         "esim": "eSIM packages",
+        "flights": "Flight tickets",
         "help": "Help",
         "how": "How it works",
         "support": "Support",
@@ -731,6 +735,7 @@ def menu_keyboard(lang: str = DEFAULT_LANG) -> dict:
         "uz": [
             "🌐 eSIM paketlar",
             "🛂 Viza muddati",
+            "✈️ Avia biletlar",
             "❓ FAQ",
             "📱 Telefon mosligi",
             "🧾 Qanday ishlaydi",
@@ -740,6 +745,7 @@ def menu_keyboard(lang: str = DEFAULT_LANG) -> dict:
         "ru": [
             "🌐 Пакеты eSIM",
             "🛂 Проверить визу",
+            "✈️ Авиабилеты",
             "❓ FAQ",
             "📱 Совместимость",
             "🧾 Как работает",
@@ -749,6 +755,7 @@ def menu_keyboard(lang: str = DEFAULT_LANG) -> dict:
         "en": [
             "🌐 eSIM packages",
             "🛂 Visa expiry",
+            "✈️ Flight tickets",
             "❓ FAQ",
             "📱 Compatibility",
             "🧾 How it works",
@@ -761,7 +768,7 @@ def menu_keyboard(lang: str = DEFAULT_LANG) -> dict:
             [{"text": labels[0]}, {"text": labels[1]}],
             [{"text": labels[2]}, {"text": labels[3]}],
             [{"text": labels[4]}, {"text": labels[5]}],
-            [{"text": labels[6]}],
+            [{"text": labels[6]}, {"text": labels[7]}],
         ],
         "resize_keyboard": True,
         "one_time_keyboard": False,
@@ -778,7 +785,7 @@ def main_menu(lang: str = DEFAULT_LANG) -> dict:
             ],
             [
                 {"text": t(lang, "esim"), "callback_data": "menu:esim"},
-                {"text": t(lang, "help"), "callback_data": "menu:help"},
+                {"text": t(lang, "flights"), "callback_data": "menu:flights"},
             ],
             [
                 {"text": t(lang, "how"), "callback_data": "menu:how"},
@@ -1006,6 +1013,209 @@ def save_order(updated_order: dict) -> None:
             return
     orders.append(updated_order)
     write_orders(orders)
+
+
+def read_flight_orders() -> list[dict]:
+    return read_json_file(FLIGHT_ORDERS_FILE, [])
+
+
+def write_flight_orders(orders: list[dict]) -> None:
+    FLIGHT_ORDERS_FILE.write_text(json.dumps(orders, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def next_flight_order_id(orders: list[dict]) -> str:
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    today_count = sum(1 for order in orders if str(order.get("id", "")).startswith(f"AV-{today}-"))
+    return f"AV-{today}-{today_count + 1:04d}"
+
+
+FLIGHT_STEPS = [
+    ("from_city", {
+        "uz": "Qaysi shahardan uchasiz? Masalan: Toshkent",
+        "ru": "Из какого города вылет? Например: Ташкент",
+        "en": "Departure city? Example: Tashkent",
+    }),
+    ("to_city", {
+        "uz": "Qaysi shaharga borasiz? Masalan: Istanbul",
+        "ru": "В какой город летите? Например: Стамбул",
+        "en": "Arrival city? Example: Istanbul",
+    }),
+    ("depart_date", {
+        "uz": "Uchish sanasini kiriting. Format: YYYY-MM-DD",
+        "ru": "Введите дату вылета. Формат: YYYY-MM-DD",
+        "en": "Enter departure date. Format: YYYY-MM-DD",
+    }),
+    ("return_date", {
+        "uz": "Qaytish sanasini kiriting. Bir tomonga bo'lsa - yozing.",
+        "ru": "Введите дату возврата. Если в одну сторону, напишите -",
+        "en": "Enter return date. For one-way, send -",
+    }),
+    ("passengers", {
+        "uz": "Yo'lovchilar sonini kiriting. Masalan: 1",
+        "ru": "Введите количество пассажиров. Например: 1",
+        "en": "Passenger count? Example: 1",
+    }),
+    ("contact", {
+        "uz": "Aloqa uchun telefon raqam yoki Telegram username yuboring.",
+        "ru": "Отправьте телефон или Telegram username для связи.",
+        "en": "Send phone number or Telegram username for contact.",
+    }),
+    ("comment", {
+        "uz": "Qo'shimcha talablar: bagaj, vaqt, transfer. Yo'q bo'lsa - yozing.",
+        "ru": "Дополнительно: багаж, время, трансфер. Если нет, напишите -",
+        "en": "Extra notes: baggage, time, transfer. If none, send -",
+    }),
+]
+
+
+def flight_prompt(step_index: int, lang: str = DEFAULT_LANG) -> str:
+    if step_index >= len(FLIGHT_STEPS):
+        return ""
+    return FLIGHT_STEPS[step_index][1].get(lang, FLIGHT_STEPS[step_index][1][DEFAULT_LANG])
+
+
+def start_flight_state(user: dict, lang: str = DEFAULT_LANG) -> tuple[str, dict]:
+    set_user_state(
+        user.get("id"),
+        {
+            "type": "flight_order",
+            "step": 0,
+            "data": {},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    intro = {
+        "uz": "Avia bilet so'rovi. Real chipta narxini admin tekshiradi va sizga taklif yuboradi.\n\n",
+        "ru": "Заявка на авиабилет. Админ проверит реальную цену и отправит предложение.\n\n",
+        "en": "Flight ticket request. Admin will check the real fare and send an offer.\n\n",
+    }.get(lang, "")
+    return intro + flight_prompt(0, lang), None
+
+
+def validate_flight_step(field: str, value: str, lang: str) -> tuple[bool, str]:
+    if field in {"from_city", "to_city", "contact"} and len(value.strip()) < 2:
+        return False, {
+            "uz": "Iltimos, to'liqroq yozing.",
+            "ru": "Пожалуйста, напишите подробнее.",
+            "en": "Please enter a little more detail.",
+        }[lang]
+    if field in {"depart_date", "return_date"}:
+        if field == "return_date" and value.strip() in {"-", "yo'q", "нет", "no"}:
+            return True, ""
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
+            return False, {
+                "uz": "Sana formati noto'g'ri. Format: YYYY-MM-DD",
+                "ru": "Неверный формат даты. Формат: YYYY-MM-DD",
+                "en": "Wrong date format. Use YYYY-MM-DD",
+            }[lang]
+        try:
+            datetime.strptime(value.strip(), "%Y-%m-%d")
+        except ValueError:
+            return False, {
+                "uz": "Bunday sana mavjud emas. Format: YYYY-MM-DD",
+                "ru": "Такой даты не существует. Формат: YYYY-MM-DD",
+                "en": "That date is invalid. Use YYYY-MM-DD",
+            }[lang]
+    if field == "passengers":
+        try:
+            count = int(value.strip())
+        except ValueError:
+            count = 0
+        if count < 1 or count > 9:
+            return False, {
+                "uz": "Yo'lovchilar soni 1 dan 9 gacha bo'lishi kerak.",
+                "ru": "Количество пассажиров должно быть от 1 до 9.",
+                "en": "Passenger count must be from 1 to 9.",
+            }[lang]
+    return True, ""
+
+
+def create_flight_order(user: dict, data: dict) -> dict:
+    orders = read_flight_orders()
+    now = datetime.now(timezone.utc).isoformat()
+    order = {
+        "id": next_flight_order_id(orders),
+        "created_at": now,
+        "updated_at": now,
+        "status": "new",
+        "user_id": user.get("id"),
+        "username": user.get("username"),
+        "first_name": user.get("first_name"),
+        "from_city": data.get("from_city", ""),
+        "to_city": data.get("to_city", ""),
+        "depart_date": data.get("depart_date", ""),
+        "return_date": "" if data.get("return_date") in {"-", "yo'q", "нет", "no"} else data.get("return_date", ""),
+        "passengers": data.get("passengers", "1"),
+        "contact": data.get("contact", ""),
+        "comment": "" if data.get("comment") in {"-", "yo'q", "нет", "no"} else data.get("comment", ""),
+        "currency": "USD",
+        "price": "",
+        "provider": read_env_safe("FLIGHT_API_PROVIDER", "manual"),
+        "payment_method": "manual_qr_until_merchant_connected",
+    }
+    orders.append(order)
+    write_flight_orders(orders)
+    return order
+
+
+def read_env_safe(name: str, default: str = "") -> str:
+    return os.environ.get(name, default).strip() or default
+
+
+def format_flight_order_for_customer(order: dict, lang: str = DEFAULT_LANG) -> str:
+    if lang == "ru":
+        return (
+            f"Заявка #{order['id']} принята.\n"
+            f"Маршрут: {order.get('from_city')} -> {order.get('to_city')}\n"
+            f"Вылет: {order.get('depart_date')}\n"
+            f"Возврат: {order.get('return_date') or 'one-way'}\n"
+            f"Пассажиры: {order.get('passengers')}\n\n"
+            "Админ проверит реальные билеты и отправит цену. Оплачивайте только после предложения."
+        )
+    if lang == "en":
+        return (
+            f"Request #{order['id']} received.\n"
+            f"Route: {order.get('from_city')} -> {order.get('to_city')}\n"
+            f"Departure: {order.get('depart_date')}\n"
+            f"Return: {order.get('return_date') or 'one-way'}\n"
+            f"Passengers: {order.get('passengers')}\n\n"
+            "Admin will check real tickets and send the price. Pay only after the offer."
+        )
+    return (
+        f"Avia bilet so'rovi #{order['id']} qabul qilindi.\n"
+        f"Yo'nalish: {order.get('from_city')} -> {order.get('to_city')}\n"
+        f"Uchish: {order.get('depart_date')}\n"
+        f"Qaytish: {order.get('return_date') or 'bir tomonga'}\n"
+        f"Yo'lovchi: {order.get('passengers')}\n\n"
+        "Admin real biletlarni tekshiradi va narx yuboradi. To'lovni faqat taklif kelgandan keyin qiling."
+    )
+
+
+def handle_flight_state(user: dict, state: dict, text: str, lang: str) -> tuple[str, dict | None]:
+    step = int(state.get("step") or 0)
+    data = state.get("data") if isinstance(state.get("data"), dict) else {}
+    if step >= len(FLIGHT_STEPS):
+        set_user_state(user.get("id"), None)
+        return start_text(user.get("first_name", "do'stim"), lang), menu_keyboard(lang)
+    field = FLIGHT_STEPS[step][0]
+    ok, error = validate_flight_step(field, text, lang)
+    if not ok:
+        return f"{error}\n\n{flight_prompt(step, lang)}", None
+    data[field] = text.strip()
+    next_step = step + 1
+    if next_step < len(FLIGHT_STEPS):
+        state["step"] = next_step
+        state["data"] = data
+        set_user_state(user.get("id"), state)
+        return flight_prompt(next_step, lang), None
+    set_user_state(user.get("id"), None)
+    order = create_flight_order(user, data)
+    append_conversation_message(
+        user.get("id"),
+        "bot",
+        f"Flight order created: {order.get('id')}",
+    )
+    return format_flight_order_for_customer(order, lang), main_menu(lang)
 
 
 def find_plan(package: dict, plan_key: str):
@@ -1659,6 +1869,9 @@ def build_reply(token: str, message: dict) -> tuple[str, dict | None]:
             main_menu(lang),
         )
 
+    if state and state.get("type") == "flight_order" and not text.startswith("/"):
+        return handle_flight_state(user, state, text, lang)
+
     if state and state.get("type") == "awaiting_visa_expiry_date":
         set_user_state(user.get("id"), None)
         return create_visa_expiry_reminder(user, text), menu_keyboard(lang)
@@ -1690,6 +1903,9 @@ def build_reply(token: str, message: dict) -> tuple[str, dict | None]:
 
     if text.startswith("/compat") or "telefon" in text_key or "совмест" in text_key or "compat" in text_key:
         return compatibility_text(lang), main_menu(lang)
+
+    if text.startswith("/flight") or "avia" in text_key or "bilet" in text_key or "авиа" in text_key or "flight" in text_key:
+        return start_flight_state(user, lang)
 
     if "esim" in text_key:
         return t(lang, "select_esim_country"), esim_country_menu(lang)
@@ -1892,6 +2108,9 @@ def build_callback_reply(token: str, callback_query: dict) -> tuple[str, dict | 
 
     if data == "menu:compat":
         return compatibility_text(lang), main_menu(lang)
+
+    if data == "menu:flights":
+        return start_flight_state(user, lang)
 
     if data == "menu:visa_free":
         return (

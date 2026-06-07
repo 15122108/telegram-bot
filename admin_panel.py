@@ -28,6 +28,7 @@ ADMIN_TEXT = {
     "uz": {
         "dashboard": "Bosh sahifa",
         "orders": "Buyurtmalar",
+        "flight_orders": "Avia buyurtmalar",
         "visa_reminders": "Viza muddati",
         "users": "Foydalanuvchilar",
         "support": "Yordam",
@@ -35,6 +36,18 @@ ADMIN_TEXT = {
         "settings": "Sozlamalar",
         "export": "Eksport",
         "broadcast": "Ommaviy xabar",
+        "flight_from": "Qayerdan",
+        "flight_to": "Qayerga",
+        "flight_dates": "Sanalar",
+        "passengers": "Yo'lovchilar",
+        "contact": "Aloqa",
+        "send_offer": "Narx yuborish",
+        "issue_ticket": "Chipta yuborish",
+        "offer_text": "Taklif matni",
+        "pnr": "PNR",
+        "ticket_number": "Chipta raqami",
+        "ticket_file": "Chipta fayli",
+        "ticket_url": "Chipta linki",
         "logout": "Logout",
         "login_title": "Visa eSIM Admin",
         "login_hint": "Panelga kirish uchun parolni kiriting.",
@@ -152,6 +165,7 @@ ADMIN_TEXT = {
     "ru": {
         "dashboard": "Панель",
         "orders": "Заказы",
+        "flight_orders": "Авиазаказы",
         "visa_reminders": "Срок визы",
         "users": "Пользователи",
         "support": "Поддержка",
@@ -159,6 +173,18 @@ ADMIN_TEXT = {
         "settings": "Настройки",
         "export": "Экспорт",
         "broadcast": "Рассылка",
+        "flight_from": "Откуда",
+        "flight_to": "Куда",
+        "flight_dates": "Даты",
+        "passengers": "Пассажиры",
+        "contact": "Контакт",
+        "send_offer": "Отправить цену",
+        "issue_ticket": "Отправить билет",
+        "offer_text": "Текст предложения",
+        "pnr": "PNR",
+        "ticket_number": "Номер билета",
+        "ticket_file": "Файл билета",
+        "ticket_url": "Ссылка билета",
         "logout": "Выйти",
         "login_title": "Visa eSIM Admin",
         "login_hint": "Введите пароль для входа в панель.",
@@ -266,6 +292,7 @@ ADMIN_TEXT = {
     "en": {
         "dashboard": "Dashboard",
         "orders": "Orders",
+        "flight_orders": "Flight orders",
         "visa_reminders": "Visa expiry",
         "users": "Users",
         "support": "Support",
@@ -273,6 +300,18 @@ ADMIN_TEXT = {
         "settings": "Settings",
         "export": "Export",
         "broadcast": "Broadcast",
+        "flight_from": "From",
+        "flight_to": "To",
+        "flight_dates": "Dates",
+        "passengers": "Passengers",
+        "contact": "Contact",
+        "send_offer": "Send offer",
+        "issue_ticket": "Issue ticket",
+        "offer_text": "Offer text",
+        "pnr": "PNR",
+        "ticket_number": "Ticket number",
+        "ticket_file": "Ticket file",
+        "ticket_url": "Ticket URL",
         "logout": "Logout",
         "login_title": "Visa eSIM Admin",
         "login_hint": "Enter the password to open the panel.",
@@ -768,6 +807,7 @@ def layout(title: str, body: str) -> bytes:
     nav_items = [
         ("/", admin_t("dashboard")),
         ("/orders", admin_t("orders")),
+        ("/flight-orders", admin_t("flight_orders")),
         ("/reminders", admin_t("visa_reminders")),
         ("/users", admin_t("users")),
         ("/support", admin_t("support")),
@@ -969,6 +1009,7 @@ setInterval(globalPollSupport, 1500);
 
 def dashboard():
     orders = read_json("orders.json", [])
+    flight_orders = read_json("flight_orders.json", [])
     reminders = read_json("reminders.json", [])
     users = collect_users()
     support_messages = read_json("support_messages.json", [])
@@ -991,6 +1032,7 @@ def dashboard():
     body = f"""
 <div class="cards">
   <div class="card"><div class="muted">{esc(admin_t("orders"))}</div><div class="num">{len(orders)}</div></div>
+  <div class="card"><div class="muted">{esc(admin_t("flight_orders"))}</div><div class="num">{len(flight_orders)}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("pending"))}</div><div class="num">{pending}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("order_sum"))}</div><div class="num">${revenue:.2f}</div></div>
   <div class="card"><div class="muted">{esc(admin_t("paid_revenue"))}</div><div class="num">${paid_revenue:.2f}</div></div>
@@ -1065,6 +1107,197 @@ def orders_page():
     return layout(admin_t("orders"), body)
 
 
+def flight_order_by_id(order_id: str) -> dict | None:
+    normalized = (order_id or "").strip().upper().lstrip("#")
+    for order in read_json("flight_orders.json", []):
+        if str(order.get("id", "")).upper() == normalized:
+            return order
+    return None
+
+
+def update_flight_order(order_id: str, updates: dict) -> dict | None:
+    orders = read_json("flight_orders.json", [])
+    normalized = (order_id or "").strip().upper().lstrip("#")
+    now = datetime.now(timezone.utc).isoformat()
+    for order in orders:
+        if str(order.get("id", "")).upper() == normalized:
+            order.update(updates)
+            order["updated_at"] = now
+            write_json("flight_orders.json", orders)
+            return order
+    return None
+
+
+def payment_qr_path() -> Path | None:
+    qr_image = read_env("CARD_QR_IMAGE").strip()
+    if not qr_image:
+        return None
+    for path in (DATA_DIR / qr_image, BASE_DIR / qr_image):
+        if path.exists() and path.is_file():
+            return path
+    return None
+
+
+def send_payment_qr_for_order(user_id: str, order_id: str, caption: str) -> None:
+    qr_path = payment_qr_path()
+    qr_link = read_env("CARD_QR_LINK").strip()
+    if qr_path:
+        content_type = "image/png" if qr_path.suffix.lower() == ".png" else "image/jpeg"
+        telegram_multipart(
+            "sendPhoto",
+            {"chat_id": str(int(user_id)), "caption": caption[:1024]},
+            "photo",
+            qr_path.name,
+            content_type,
+            qr_path.read_bytes(),
+        )
+        append_conversation_message(user_id, "bot", caption)
+        return
+    if qr_link:
+        send_plain_bot_message(user_id, f"{caption}\n\n{qr_link}", auto_translate=False)
+
+
+def send_flight_offer(order: dict) -> None:
+    user_id = str(order.get("user_id") or "")
+    if not user_id:
+        raise RuntimeError("Flight order user_id topilmadi")
+    price = order.get("price") or ""
+    currency = order.get("currency") or "USD"
+    offer_text = order.get("offer_text") or ""
+    message = (
+        f"Avia bilet taklifi #{order.get('id')}\n"
+        f"Yo'nalish: {order.get('from_city')} -> {order.get('to_city')}\n"
+        f"Uchish: {order.get('depart_date')}\n"
+        f"Qaytish: {order.get('return_date') or 'bir tomonga'}\n"
+        f"Yo'lovchi: {order.get('passengers')}\n"
+        f"Narx: {price} {currency}\n\n"
+    )
+    if offer_text:
+        message += f"{offer_text}\n\n"
+    payment_lines = []
+    card_number = read_env("CARD_NUMBER").strip()
+    card_holder = read_env("CARD_HOLDER").strip()
+    card_link = read_env("CARD_PAYMENT_LINK").strip()
+    qr_link = read_env("CARD_QR_LINK").strip()
+    if card_number:
+        payment_lines.append(f"Karta: {card_number}" + (f" ({card_holder})" if card_holder else ""))
+    if card_link:
+        payment_lines.append(f"To'lov linki: {card_link}")
+    if qr_link:
+        payment_lines.append(f"QR link: {qr_link}")
+    message += "To'lovni QR/karta orqali qiling.\n"
+    if payment_lines:
+        message += "\n".join(payment_lines) + "\n"
+    message += (
+        "\nTo'lovdan keyin chek screenshotini shu chatga yuboring "
+        f"va order raqamini yozing: #{order.get('id')}"
+    )
+    send_plain_bot_message(user_id, message, auto_translate=True)
+    send_payment_qr_for_order(user_id, str(order.get("id")), f"Order #{order.get('id')} uchun QR to'lov.")
+
+
+def send_flight_ticket(order: dict, file_item: dict | None = None) -> None:
+    user_id = str(order.get("user_id") or "")
+    if not user_id:
+        raise RuntimeError("Flight order user_id topilmadi")
+    lines = [
+        f"Avia bilet tayyor. Order #{order.get('id')}",
+        f"Yo'nalish: {order.get('from_city')} -> {order.get('to_city')}",
+        f"Uchish: {order.get('depart_date')}",
+    ]
+    if order.get("pnr"):
+        lines.append(f"PNR: {order.get('pnr')}")
+    if order.get("ticket_number"):
+        lines.append(f"Chipta raqami: {order.get('ticket_number')}")
+    if order.get("ticket_url"):
+        lines.append(f"Chipta linki: {order.get('ticket_url')}")
+    if order.get("ticket_message"):
+        lines.extend(["", order.get("ticket_message")])
+    text = "\n".join(lines)
+    send_plain_bot_message(user_id, text, auto_translate=True)
+    if file_item and file_item.get("bytes"):
+        telegram_multipart(
+            "sendDocument",
+            {"chat_id": str(int(user_id)), "caption": f"Chipta #{order.get('id')}"},
+            "document",
+            file_item.get("filename") or "ticket.pdf",
+            file_item.get("content_type") or "application/pdf",
+            file_item.get("bytes"),
+        )
+        append_conversation_message(user_id, "bot", f"[ticket file] {order.get('id')}")
+
+
+def flight_orders_page(selected_id: str = "", message: str = "", error: str = ""):
+    orders = read_json("flight_orders.json", [])
+    selected = flight_order_by_id(selected_id) if selected_id else (orders[-1] if orders else None)
+    rows = []
+    for order in reversed(orders):
+        rows.append(
+            f"<tr><td><a href='/flight-orders?id={esc(order.get('id'))}'>{esc(order.get('id'))}</a></td>"
+            f"<td><a href='/user?id={esc(order.get('user_id'))}'>{esc(order.get('username') or order.get('user_id'))}</a></td>"
+            f"<td>{esc(order.get('from_city'))}</td><td>{esc(order.get('to_city'))}</td>"
+            f"<td>{esc(order.get('depart_date'))} / {esc(order.get('return_date') or '-')}</td>"
+            f"<td>{esc(order.get('passengers'))}</td><td>{esc(order.get('price'))} {esc(order.get('currency') or '')}</td>"
+            f"<td><span class='badge {esc(order.get('status'))}'>{esc(order.get('status'))}</span></td>"
+            f"<td>{esc(order.get('created_at'))}</td></tr>"
+        )
+    message_html = f"<p class='badge replied'>{esc(message)}</p>" if message else ""
+    error_html = f"<p class='badge open'>{esc(error)}</p>" if error else ""
+    selected_html = "<p class='muted'>Avia buyurtmani tanlang.</p>"
+    if selected:
+        selected_html = f"""
+<div class="card">
+  <h3>{esc(admin_t('flight_orders'))}: {esc(selected.get('id'))}</h3>
+  <p><b>{esc(admin_t('user'))}:</b> <a href="/user?id={esc(selected.get('user_id'))}">{esc(selected.get('username') or selected.get('user_id'))}</a></p>
+  <p><b>{esc(admin_t('flight_from'))}:</b> {esc(selected.get('from_city'))} &rarr; {esc(selected.get('to_city'))}</p>
+  <p><b>{esc(admin_t('flight_dates'))}:</b> {esc(selected.get('depart_date'))} / {esc(selected.get('return_date') or '-')}</p>
+  <p><b>{esc(admin_t('passengers'))}:</b> {esc(selected.get('passengers'))}</p>
+  <p><b>{esc(admin_t('contact'))}:</b> {esc(selected.get('contact'))}</p>
+  <p><b>Izoh:</b> {esc(selected.get('comment'))}</p>
+  <form method="post" action="/flight-offer">
+    <input type="hidden" name="id" value="{esc(selected.get('id'))}">
+    <div class="cards">
+      <div class="card"><label>{esc(admin_t('price'))}</label><input type="number" step="0.01" name="price" value="{esc(selected.get('price'))}" required></div>
+      <div class="card"><label>Currency</label><input type="text" name="currency" value="{esc(selected.get('currency') or 'USD')}" required></div>
+    </div>
+    <p><label>{esc(admin_t('offer_text'))}</label><textarea name="offer_text">{esc(selected.get('offer_text'))}</textarea></p>
+    <button>{esc(admin_t('send_offer'))}</button>
+  </form>
+</div>
+<div class="card">
+  <h4>{esc(admin_t('issue_ticket'))}</h4>
+  <form method="post" action="/flight-issue" enctype="multipart/form-data">
+    <input type="hidden" name="id" value="{esc(selected.get('id'))}">
+    <p><label>{esc(admin_t('pnr'))}</label><input type="text" name="pnr" value="{esc(selected.get('pnr'))}"></p>
+    <p><label>{esc(admin_t('ticket_number'))}</label><input type="text" name="ticket_number" value="{esc(selected.get('ticket_number'))}"></p>
+    <p><label>{esc(admin_t('ticket_url'))}</label><input type="url" name="ticket_url" value="{esc(selected.get('ticket_url'))}"></p>
+    <p><label>{esc(admin_t('ticket_file'))}</label><input type="file" name="ticket_file" accept=".pdf,image/*"></p>
+    <p><label>Xabar</label><textarea name="ticket_message">{esc(selected.get('ticket_message'))}</textarea></p>
+    <button>{esc(admin_t('issue_ticket'))}</button>
+  </form>
+  <form method="post" action="/flight-status" style="margin-top:10px;display:block">
+    <input type="hidden" name="id" value="{esc(selected.get('id'))}">
+    <select name="status">
+      <option value="new">new</option>
+      <option value="waiting_payment">waiting_payment</option>
+      <option value="paid_pending_ticket">paid_pending_ticket</option>
+      <option value="ticket_issued">ticket_issued</option>
+      <option value="cancelled">cancelled</option>
+    </select>
+    <button>{esc(admin_t('save'))}</button>
+  </form>
+</div>
+"""
+    body = f"""
+<h3>{esc(admin_t('flight_orders'))}</h3>
+{message_html}
+{error_html}
+{selected_html}
+<table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('user'))}</th><th>{esc(admin_t('flight_from'))}</th><th>{esc(admin_t('flight_to'))}</th><th>{esc(admin_t('flight_dates'))}</th><th>{esc(admin_t('passengers'))}</th><th>{esc(admin_t('price'))}</th><th>{esc(admin_t('status'))}</th><th>{esc(admin_t('created'))}</th></tr>{''.join(rows)}</table>
+"""
+    return layout(admin_t("flight_orders"), body)
+
+
 def reminders_page():
     rows = []
     for reminder in reversed(read_json("reminders.json", [])):
@@ -1081,6 +1314,7 @@ def collect_users():
     users = {}
     raw_users = read_json("users.json", {})
     orders = read_json("orders.json", [])
+    flight_orders = read_json("flight_orders.json", [])
     reminders = read_json("reminders.json", [])
     support_messages = read_json("support_messages.json", [])
 
@@ -1096,6 +1330,7 @@ def collect_users():
             "orders_sum": 0.0,
             "reminders_count": 0,
             "support_count": 0,
+            "flight_orders_count": 0,
             "last_activity": user.get("updated_at", ""),
         }
 
@@ -1115,6 +1350,7 @@ def collect_users():
                 "orders_sum": 0.0,
                 "reminders_count": 0,
                 "support_count": 0,
+                "flight_orders_count": 0,
                 "last_activity": "",
             }
         user = users[user_id]
@@ -1139,6 +1375,14 @@ def collect_users():
         except (TypeError, ValueError):
             pass
 
+    for order in flight_orders:
+        user = ensure_user(order)
+        if not user:
+            continue
+        user["flight_orders_count"] += 1
+        if order.get("status") in {"new", "waiting_payment", "paid_pending_ticket"}:
+            user["pending_count"] += 1
+
     for reminder in reminders:
         user = ensure_user(reminder)
         if user:
@@ -1162,7 +1406,7 @@ def users_page():
             f"<tr><td><a href='/user?id={esc(user_id)}'>{esc(user_id)}</a></td><td>{esc(username)}</td>"
             f"<td>{esc(user.get('first_name'))}</td><td>{esc(user.get('lang'))}</td>"
             f"<td>{esc(user.get('orders_count'))}</td><td>{esc(user.get('pending_count'))}</td>"
-            f"<td>${user.get('orders_sum', 0):.2f}</td><td>{esc(user.get('reminders_count'))}</td>"
+            f"<td>{esc(user.get('flight_orders_count'))}</td><td>${user.get('orders_sum', 0):.2f}</td><td>{esc(user.get('reminders_count'))}</td>"
             f"<td>{esc(user.get('support_count'))}</td><td>{esc(user.get('last_activity'))}</td></tr>"
         )
     empty = "" if rows else f"<p class='muted'>{esc(admin_t('no_users_hint'))}</p>"
@@ -1171,7 +1415,7 @@ def users_page():
 <h3>{esc(admin_t('users'))}</h3>
 <p class="muted"><b>{esc(admin_t('users_state'))}:</b> <span id="users-count">{len(users)}</span></p>
 {empty}
-<table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('username'))}</th><th>{esc(admin_t('name'))}</th><th>{esc(admin_t('language'))}</th><th>{esc(admin_t('orders'))}</th><th>{esc(admin_t('pending'))}</th><th>{esc(admin_t('sum'))}</th><th>{esc(admin_t('visa_reminders'))}</th><th>{esc(admin_t('support'))}</th><th>{esc(admin_t('last_activity'))}</th></tr>{"".join(rows)}</table>
+<table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('username'))}</th><th>{esc(admin_t('name'))}</th><th>{esc(admin_t('language'))}</th><th>{esc(admin_t('orders'))}</th><th>{esc(admin_t('pending'))}</th><th>{esc(admin_t('flight_orders'))}</th><th>{esc(admin_t('sum'))}</th><th>{esc(admin_t('visa_reminders'))}</th><th>{esc(admin_t('support'))}</th><th>{esc(admin_t('last_activity'))}</th></tr>{"".join(rows)}</table>
 <script>
 let latestUserId = {json.dumps(latest.get("user_id", ""))};
 let usersCount = {len(users)};
@@ -1224,6 +1468,9 @@ def users_state() -> bytes:
 def user_detail_page(user_id: str):
     users = read_json("users.json", {})
     orders = [order for order in read_json("orders.json", []) if str(order.get("user_id")) == user_id]
+    flight_orders = [
+        order for order in read_json("flight_orders.json", []) if str(order.get("user_id")) == user_id
+    ]
     reminders = [
         reminder for reminder in read_json("reminders.json", []) if str(reminder.get("user_id")) == user_id
     ]
@@ -1259,6 +1506,18 @@ def user_detail_page(user_id: str):
         reminder_rows.append(
             f"<tr><td>{esc(reminder.get('id'))}</td><td>{esc(reminder.get('expiry_date'))}</td>"
             f"<td>{esc(', '.join(reminder.get('sent', [])))}</td><td>{esc(reminder.get('created_at'))}</td></tr>"
+        )
+
+    flight_rows = []
+    for order in reversed(flight_orders):
+        price = order.get("price") or ""
+        currency = order.get("currency") or "USD"
+        flight_rows.append(
+            f"<tr><td><a href='/flight-orders?id={esc(order.get('id'))}'>{esc(order.get('id'))}</a></td>"
+            f"<td>{esc(order.get('from_city'))} -> {esc(order.get('to_city'))}</td>"
+            f"<td>{esc(order.get('depart_date'))} / {esc(order.get('return_date') or '-')}</td>"
+            f"<td>{esc(order.get('passengers'))}</td><td>{esc(price)} {esc(currency)}</td>"
+            f"<td>{esc(order.get('status'))}</td><td>{esc(order.get('created_at'))}</td></tr>"
         )
 
     support_rows = []
@@ -1313,6 +1572,8 @@ def user_detail_page(user_id: str):
 </div>
 <h4>{esc(admin_t('orders'))}</h4>
 <table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('country'))}</th><th>{esc(admin_t('plan'))}</th><th>{esc(admin_t('price'))}</th><th>{esc(admin_t('cost'))}</th><th>{esc(admin_t('profit'))}</th><th>{esc(admin_t('status'))}</th><th>{esc(admin_t('created'))}</th><th>{esc(admin_t('action'))}</th></tr>{''.join(order_rows)}</table>
+<h4>{esc(admin_t('flight_orders'))}</h4>
+<table><tr><th>{esc(admin_t('id'))}</th><th>Yo'nalish</th><th>{esc(admin_t('flight_dates'))}</th><th>{esc(admin_t('passengers'))}</th><th>{esc(admin_t('price'))}</th><th>{esc(admin_t('status'))}</th><th>{esc(admin_t('created'))}</th></tr>{''.join(flight_rows)}</table>
 <h4>{esc(admin_t('visa_reminders'))}</h4>
 <table><tr><th>{esc(admin_t('id'))}</th><th>{esc(admin_t('visa_reminders'))}</th><th>{esc(admin_t('sent'))}</th><th>{esc(admin_t('created'))}</th></tr>{''.join(reminder_rows)}</table>
 <h4>{esc(admin_t('support_questions'))}</h4>
@@ -1532,6 +1793,10 @@ def settings_page(message: str = "", error: str = "", password_hash: str = ""):
         ("ESIMGO_API_KEY", admin_t("esimgo_api_key")),
         ("ESIMGO_API_BASE", admin_t("esimgo_api_base")),
         ("ESIM_MARKUP_PERCENT", admin_t("esim_markup_percent")),
+        ("FLIGHT_PROVIDER_MODE", "Avia provider rejimi (manual/api)"),
+        ("FLIGHT_API_PROVIDER", "Avia API provider"),
+        ("FLIGHT_API_BASE", "Avia API base URL"),
+        ("FLIGHT_API_KEY", "Avia API key"),
     ]
     settings_inputs = "\n".join(
         f"<p><label>{esc(label)}</label><br><input type='text' name='{esc(key)}' value='{esc(read_env(key))}'></p>"
@@ -1598,6 +1863,10 @@ def update_bot_settings(params: dict) -> None:
         "ESIMGO_API_KEY",
         "ESIMGO_API_BASE",
         "ESIM_MARKUP_PERCENT",
+        "FLIGHT_PROVIDER_MODE",
+        "FLIGHT_API_PROVIDER",
+        "FLIGHT_API_BASE",
+        "FLIGHT_API_KEY",
     ]
     write_env_values({key: params.get(key, [""])[0].strip() for key in keys})
 
@@ -1693,10 +1962,11 @@ def refresh_esim_catalogue_from_panel() -> tuple[bool, str]:
 
 
 def export_page():
-    body = """
+    body = f"""
 <h3>{esc(admin_t("export"))} / Backup</h3>
 <div class="cards">
   <div class="card"><h4>{esc(admin_t("orders"))}</h4><p><a href="/export-file?name=orders.json">orders.json {esc(admin_t("download"))}</a></p></div>
+  <div class="card"><h4>{esc(admin_t("flight_orders"))}</h4><p><a href="/export-file?name=flight_orders.json">flight_orders.json {esc(admin_t("download"))}</a></p></div>
   <div class="card"><h4>{esc(admin_t("users"))}</h4><p><a href="/export-file?name=users.json">users.json {esc(admin_t("download"))}</a></p></div>
   <div class="card"><h4>{esc(admin_t("support"))}</h4><p><a href="/export-file?name=support_messages.json">support_messages.json {esc(admin_t("download"))}</a></p></div>
   <div class="card"><h4>Suhbat tarixi</h4><p><a href="/export-file?name=conversations.json">conversations.json {esc(admin_t("download"))}</a></p></div>
@@ -1735,6 +2005,7 @@ def fulfill_order_from_panel(order_id: str) -> str:
 
     bot.DATA_DIR = DATA_DIR
     bot.ORDERS_FILE = DATA_DIR / "orders.json"
+    bot.FLIGHT_ORDERS_FILE = DATA_DIR / "flight_orders.json"
     bot.USERS_FILE = DATA_DIR / "users.json"
     bot.REMINDERS_FILE = DATA_DIR / "reminders.json"
     bot.STATES_FILE = DATA_DIR / "states.json"
@@ -1875,6 +2146,7 @@ def handle_telegram_webhook(update: dict) -> None:
         raise RuntimeError("TELEGRAM_BOT_TOKEN topilmadi")
     bot.DATA_DIR = DATA_DIR
     bot.ORDERS_FILE = DATA_DIR / "orders.json"
+    bot.FLIGHT_ORDERS_FILE = DATA_DIR / "flight_orders.json"
     bot.USERS_FILE = DATA_DIR / "users.json"
     bot.REMINDERS_FILE = DATA_DIR / "reminders.json"
     bot.STATES_FILE = DATA_DIR / "states.json"
@@ -2159,6 +2431,9 @@ class Handler(BaseHTTPRequestHandler):
             content = dashboard()
         elif path == "/orders":
             content = orders_page()
+        elif path == "/flight-orders":
+            query = parse_qs(urlparse(self.path).query)
+            content = flight_orders_page(query.get("id", [""])[0])
         elif path == "/reminders":
             content = reminders_page()
         elif path == "/users":
@@ -2177,7 +2452,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/export-file":
             query = parse_qs(urlparse(self.path).query)
             name = query.get("name", [""])[0]
-            allowed = {"orders.json", "users.json", "support_messages.json", "conversations.json", "reminders.json", "esim_packages.json"}
+            allowed = {"orders.json", "flight_orders.json", "users.json", "support_messages.json", "conversations.json", "reminders.json", "esim_packages.json"}
             if name not in allowed:
                 self.send_response(400)
                 self.end_headers()
@@ -2264,8 +2539,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(data)
             return
         is_multipart_broadcast = path == "/broadcast" and content_type.startswith("multipart/form-data")
+        is_multipart_flight_issue = path == "/flight-issue" and content_type.startswith("multipart/form-data")
         params = {}
-        if not is_multipart_broadcast:
+        if not is_multipart_broadcast and not is_multipart_flight_issue:
             length = int(self.headers.get("Content-Length", "0"))
             params = parse_qs(self.rfile.read(length).decode("utf-8"))
         if path == "/login":
@@ -2305,6 +2581,66 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(303)
             self.send_header("Location", back)
             self.end_headers()
+            return
+        if path == "/flight-status":
+            order_id = params.get("id", [""])[0]
+            status = params.get("status", [""])[0]
+            update_flight_order(order_id, {"status": status})
+            self.send_response(303)
+            self.send_header("Location", f"/flight-orders?id={quote(order_id)}")
+            self.end_headers()
+            return
+        if path == "/flight-offer":
+            order_id = params.get("id", [""])[0]
+            price = params.get("price", [""])[0].strip()
+            currency = params.get("currency", ["USD"])[0].strip().upper() or "USD"
+            offer_text = params.get("offer_text", [""])[0].strip()
+            order = update_flight_order(
+                order_id,
+                {
+                    "price": price,
+                    "currency": currency,
+                    "offer_text": offer_text,
+                    "status": "waiting_payment",
+                    "offered_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            if order:
+                try:
+                    send_flight_offer(order)
+                    self.send_html(flight_orders_page(order_id, message="Narx mijozga yuborildi."))
+                except Exception as exc:
+                    self.send_html(flight_orders_page(order_id, error=f"Narx yuborilmadi: {exc}"))
+                return
+            self.send_html(flight_orders_page(error="Avia buyurtma topilmadi."))
+            return
+        if path == "/flight-issue":
+            if is_multipart_flight_issue:
+                length = int(self.headers.get("Content-Length", "0"))
+                fields, files = parse_multipart_form(content_type, self.rfile.read(length))
+            else:
+                fields = {key: vals[0] if vals else "" for key, vals in params.items()}
+                files = {}
+            order_id = fields.get("id", "")
+            order = update_flight_order(
+                order_id,
+                {
+                    "status": "ticket_issued",
+                    "pnr": fields.get("pnr", "").strip(),
+                    "ticket_number": fields.get("ticket_number", "").strip(),
+                    "ticket_url": fields.get("ticket_url", "").strip(),
+                    "ticket_message": fields.get("ticket_message", "").strip(),
+                    "issued_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            if order:
+                try:
+                    send_flight_ticket(order, files.get("ticket_file"))
+                    self.send_html(flight_orders_page(order_id, message="Chipta mijozga yuborildi."))
+                except Exception as exc:
+                    self.send_html(flight_orders_page(order_id, error=f"Chipta yuborilmadi: {exc}"))
+                return
+            self.send_html(flight_orders_page(error="Avia buyurtma topilmadi."))
             return
         if path == "/send-message":
             user_id = params.get("user_id", [""])[0]

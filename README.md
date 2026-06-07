@@ -1,6 +1,6 @@
 # Visa eSIM Uzbekistan Bot
 
-Telegram bot for selling travel eSIM packages and handling visa expiry reminders.
+Telegram bot for selling travel eSIM packages, collecting flight ticket requests, and handling visa expiry reminders.
 
 ## Features
 
@@ -10,7 +10,8 @@ Telegram bot for selling travel eSIM packages and handling visa expiry reminders
 - Configurable markup with `ESIM_MARKUP_PERCENT`
 - Manual payment verification flow
 - Admin command to create a real eSIM after payment: `/fulfill ORDER_ID`
-- Admin panel with users, orders, profit KPIs, support, broadcast, packages, settings, and exports
+- Flight ticket request flow with admin offer, QR/card payment instructions, and ticket/PNR delivery
+- Admin panel with users, eSIM orders, flight orders, profit KPIs, support, broadcast, packages, settings, and exports
 - Support inbox with text/photo/video/document attachments
 - Broadcast text/photo/video messages
 - User tracking after `/start` or any bot interaction
@@ -31,6 +32,10 @@ ESIMGO_API_KEY=
 ESIMGO_API_BASE=https://api.esim-go.com/v2.4
 ESIM_MARKUP_PERCENT=30
 ALLOW_MANUAL_ESIM_FALLBACK=0
+FLIGHT_PROVIDER_MODE=manual
+FLIGHT_API_PROVIDER=
+FLIGHT_API_BASE=
+FLIGHT_API_KEY=
 CARD_QR_IMAGE=payment_qr.png
 CARD_PAYMENT_NOTE=
 ```
@@ -54,6 +59,15 @@ CARD_PAYMENT_NOTE=
 ```
 
 The bot creates a real eSIM through eSIM Go and sends installation details to the customer.
+
+## Flight Ticket Flow
+
+1. Customer opens `Avia biletlar` and sends route, dates, passenger count, and contact.
+2. Admin opens `Avia buyurtmalar` in the admin panel.
+3. Admin checks a real ticket source, sets price, and sends the offer with QR/card payment instructions.
+4. After payment verification, admin sends PNR, ticket number, ticket URL, or ticket PDF/image from the panel.
+
+`FLIGHT_PROVIDER_MODE=manual` is the default. Real ticket API automation can be connected later through `FLIGHT_API_PROVIDER`, `FLIGHT_API_BASE`, and `FLIGHT_API_KEY`.
 
 ## Local Run
 
