@@ -4,23 +4,65 @@ import subprocess
 import sys
 import threading
 from http.server import HTTPServer
+from urllib.request import urlopen
 
 import admin_panel
 
 
 def main() -> None:
-    bot_process = subprocess.Popen([sys.executable, "bot.py"])
+    stop_event = threading.Event()
+    process_lock = threading.Lock()
+    bot_process: subprocess.Popen | None = None
 
-    def watch_bot() -> None:
-        code = bot_process.wait()
-        print(f"bot.py exited with code {code}", flush=True)
-        os._exit(code or 1)
+    def start_bot() -> subprocess.Popen:
+        print("Starting bot.py", flush=True)
+        return subprocess.Popen([sys.executable, "bot.py"])
 
-    threading.Thread(target=watch_bot, daemon=True).start()
+    def bot_watchdog() -> None:
+        nonlocal bot_process
+        restart_delay = 2
+        while not stop_event.is_set():
+            with process_lock:
+                bot_process = start_bot()
+                current_process = bot_process
+            code = current_process.wait()
+            if stop_event.is_set():
+                break
+            print(f"bot.py exited with code {code}; restarting in {restart_delay}s", flush=True)
+            stop_event.wait(restart_delay)
+            restart_delay = min(restart_delay * 2, 30)
+
+    def keepalive_loop() -> None:
+        enabled = os.environ.get("KEEPALIVE_ENABLED", "1").strip() != "0"
+        if not enabled:
+            return
+        base_url = os.environ.get("KEEPALIVE_URL") or os.environ.get("RENDER_EXTERNAL_URL") or ""
+        if not base_url:
+            print("Keepalive disabled: KEEPALIVE_URL/RENDER_EXTERNAL_URL not set", flush=True)
+            return
+        url = base_url.rstrip("/") + "/health"
+        try:
+            interval = max(60, int(os.environ.get("KEEPALIVE_INTERVAL_SECONDS", "600")))
+        except ValueError:
+            interval = 600
+        print(f"Keepalive enabled: {url} every {interval}s", flush=True)
+        while not stop_event.wait(interval):
+            try:
+                with urlopen(url, timeout=10) as response:
+                    response.read(64)
+                print("Keepalive ping ok", flush=True)
+            except Exception as exc:
+                print(f"Keepalive ping failed: {exc}", flush=True)
+
+    threading.Thread(target=bot_watchdog, daemon=True).start()
+    threading.Thread(target=keepalive_loop, daemon=True).start()
 
     def shutdown(signum, frame) -> None:
-        if bot_process.poll() is None:
-            bot_process.terminate()
+        stop_event.set()
+        with process_lock:
+            current_process = bot_process
+        if current_process and current_process.poll() is None:
+            current_process.terminate()
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, shutdown)

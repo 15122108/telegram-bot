@@ -2,6 +2,18 @@
 
 Bu loyiha sotiladigan Telegram bot uchun VPSda 24/7 ishlashga tayyorlangan.
 
+## Render bo'yicha muhim eslatma
+
+Render Free web service 15 daqiqa inbound traffic bo'lmasa uxlaydi. Uyg'onganda birinchi so'rov 1 daqiqagacha kutishi mumkin. Shuning uchun sotiladigan real 24/7 bot uchun:
+
+- Render paid instance yoki VPS ishlating.
+- `Health Check Path` qiymati: `/health`.
+- `KEEPALIVE_ENABLED=1` va `KEEPALIVE_INTERVAL_SECONDS=600` qo'ying.
+- Render Free ishlatilsa, tashqi monitoring xizmatida `https://YOUR-SERVICE.onrender.com/health` manziliga 5-10 daqiqada bir ping sozlang.
+- JSON data yo'qolmasligi uchun persistent disk yoki database ishlating. Render Free web service local fayllarni restart/redeploy/spin-down paytida saqlab qolmaydi.
+
+Kod ichida `start_koyeb.py` watchdog bor: `bot.py` yiqilsa, avtomatik qayta ishga tushiradi.
+
 ## 1. Student Pack orqali credit olish
 
 1. GitHub Student Developer Packga kiring.
