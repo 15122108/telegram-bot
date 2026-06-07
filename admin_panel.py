@@ -42,6 +42,8 @@ ADMIN_TEXT = {
         "passengers": "Yo'lovchilar",
         "contact": "Aloqa",
         "send_offer": "Narx yuborish",
+        "confirm_payment": "To'lovni tasdiqlash",
+        "auto_book": "Avtomatik bron/chiqarish",
         "issue_ticket": "Chipta yuborish",
         "offer_text": "Taklif matni",
         "pnr": "PNR",
@@ -179,6 +181,8 @@ ADMIN_TEXT = {
         "passengers": "Пассажиры",
         "contact": "Контакт",
         "send_offer": "Отправить цену",
+        "confirm_payment": "Подтвердить оплату",
+        "auto_book": "Автобронирование/выпуск",
         "issue_ticket": "Отправить билет",
         "offer_text": "Текст предложения",
         "pnr": "PNR",
@@ -306,6 +310,8 @@ ADMIN_TEXT = {
         "passengers": "Passengers",
         "contact": "Contact",
         "send_offer": "Send offer",
+        "confirm_payment": "Confirm payment",
+        "auto_book": "Auto book/issue",
         "issue_ticket": "Issue ticket",
         "offer_text": "Offer text",
         "pnr": "PNR",
@@ -1227,6 +1233,134 @@ def send_flight_ticket(order: dict, file_item: dict | None = None) -> None:
         append_conversation_message(user_id, "bot", f"[ticket file] {order.get('id')}")
 
 
+def confirm_flight_payment(order_id: str) -> dict | None:
+    order = update_flight_order(
+        order_id,
+        {
+            "status": "payment_confirmed",
+            "payment_confirmed_at": datetime.now(timezone.utc).isoformat(),
+            "payment_method": "owner_card_qr_manual_confirm",
+        },
+    )
+    if order and order.get("user_id"):
+        send_plain_bot_message(
+            str(order["user_id"]),
+            (
+                f"To'lov tasdiqlandi. Order #{order.get('id')}\n"
+                "Endi bilet bron/chiqarish bosqichi boshlanadi. Tayyor bo'lgach chipta shu chatga yuboriladi."
+            ),
+            auto_translate=True,
+        )
+    return order
+
+
+def flight_api_booking_endpoint() -> str:
+    base = read_env("FLIGHT_API_BASE").strip().rstrip("/")
+    path = read_env("FLIGHT_API_BOOKING_PATH", "/bookings").strip() or "/bookings"
+    if not base:
+        return ""
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    return base + (path if path.startswith("/") else f"/{path}")
+
+
+def request_flight_booking(order: dict) -> tuple[bool, str, dict]:
+    mode = read_env("FLIGHT_PROVIDER_MODE", "manual").strip().lower() or "manual"
+    if mode != "api":
+        return (
+            False,
+            "Avia API hali ulanmagan. Hozir manual rejim: to'lov tasdiqlangach real provayderdan chipta olib, paneldan yuboring.",
+            {},
+        )
+    endpoint = flight_api_booking_endpoint()
+    api_key = read_env("FLIGHT_API_KEY").strip()
+    provider = read_env("FLIGHT_API_PROVIDER", "custom").strip() or "custom"
+    if not endpoint or not api_key:
+        return False, "FLIGHT_API_BASE/FLIGHT_API_KEY to'liq sozlanmagan.", {}
+
+    payload = {
+        "provider": provider,
+        "order_id": order.get("id"),
+        "from": order.get("from_city"),
+        "to": order.get("to_city"),
+        "depart_date": order.get("depart_date"),
+        "return_date": order.get("return_date"),
+        "passengers": order.get("passengers"),
+        "contact": order.get("contact"),
+        "price": order.get("price"),
+        "currency": order.get("currency") or "USD",
+        "customer": {
+            "telegram_id": order.get("user_id"),
+            "username": order.get("username"),
+            "first_name": order.get("first_name"),
+        },
+        "comment": order.get("comment"),
+    }
+    request = Request(
+        endpoint,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "X-Order-Id": str(order.get("id") or ""),
+        },
+        method="POST",
+    )
+    with urlopen(request, timeout=30) as response:
+        raw = response.read().decode("utf-8", "ignore")
+    try:
+        data = json.loads(raw) if raw else {}
+    except json.JSONDecodeError:
+        data = {"raw_response": raw}
+    result = data.get("result") if isinstance(data.get("result"), dict) else data
+    updates = {
+        "status": "booked",
+        "booking_provider": provider,
+        "booking_response": data,
+        "booked_at": datetime.now(timezone.utc).isoformat(),
+    }
+    for key in ("pnr", "ticket_number", "ticket_url", "booking_reference"):
+        if isinstance(result, dict) and result.get(key):
+            updates[key] = result[key]
+    if updates.get("pnr") or updates.get("ticket_number") or updates.get("ticket_url"):
+        updates["status"] = "ticket_issued"
+    return True, "Bron/chiqarish API orqali bajarildi.", updates
+
+
+def book_flight_from_panel(order_id: str) -> tuple[bool, str]:
+    order = flight_order_by_id(order_id)
+    if not order:
+        return False, "Avia buyurtma topilmadi."
+    if order.get("status") not in {"payment_confirmed", "paid_pending_ticket", "book_failed"}:
+        return False, "Avval to'lovni tasdiqlang."
+    try:
+        ok, message, updates = request_flight_booking(order)
+    except Exception as exc:
+        update_flight_order(
+            order_id,
+            {
+                "status": "book_failed",
+                "booking_error": str(exc),
+                "booking_failed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        return False, f"Avtomatik bron xatosi: {exc}"
+    if not ok:
+        return False, message
+    updated = update_flight_order(order_id, updates)
+    if not updated:
+        return False, "Bron javobi saqlandi, lekin order yangilanmadi."
+    if updated.get("status") == "ticket_issued":
+        send_flight_ticket(updated)
+    elif updated.get("user_id"):
+        send_plain_bot_message(
+            str(updated["user_id"]),
+            f"Order #{updated.get('id')} bo'yicha bron qilindi. Chipta ma'lumotlari tayyor bo'lgach yuboriladi.",
+            auto_translate=True,
+        )
+    return True, message
+
+
 def flight_orders_page(selected_id: str = "", message: str = "", error: str = ""):
     orders = read_json("flight_orders.json", [])
     selected = flight_order_by_id(selected_id) if selected_id else (orders[-1] if orders else None)
@@ -1263,6 +1397,17 @@ def flight_orders_page(selected_id: str = "", message: str = "", error: str = ""
     <p><label>{esc(admin_t('offer_text'))}</label><textarea name="offer_text">{esc(selected.get('offer_text'))}</textarea></p>
     <button>{esc(admin_t('send_offer'))}</button>
   </form>
+  <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+    <form method="post" action="/flight-payment-confirm">
+      <input type="hidden" name="id" value="{esc(selected.get('id'))}">
+      <button>{esc(admin_t('confirm_payment'))}</button>
+    </form>
+    <form method="post" action="/flight-book">
+      <input type="hidden" name="id" value="{esc(selected.get('id'))}">
+      <button>{esc(admin_t('auto_book'))}</button>
+    </form>
+  </div>
+  <p class="muted">Hozir to'lov sizning karta/QR orqali qabul qilinadi. Payment API ulangandan keyin bu bosqich avtomatik tekshirishga almashtiriladi.</p>
 </div>
 <div class="card">
   <h4>{esc(admin_t('issue_ticket'))}</h4>
@@ -1796,6 +1941,7 @@ def settings_page(message: str = "", error: str = "", password_hash: str = ""):
         ("FLIGHT_PROVIDER_MODE", "Avia provider rejimi (manual/api)"),
         ("FLIGHT_API_PROVIDER", "Avia API provider"),
         ("FLIGHT_API_BASE", "Avia API base URL"),
+        ("FLIGHT_API_BOOKING_PATH", "Avia booking endpoint path"),
         ("FLIGHT_API_KEY", "Avia API key"),
     ]
     settings_inputs = "\n".join(
@@ -1866,6 +2012,7 @@ def update_bot_settings(params: dict) -> None:
         "FLIGHT_PROVIDER_MODE",
         "FLIGHT_API_PROVIDER",
         "FLIGHT_API_BASE",
+        "FLIGHT_API_BOOKING_PATH",
         "FLIGHT_API_KEY",
     ]
     write_env_values({key: params.get(key, [""])[0].strip() for key in keys})
@@ -2613,6 +2760,23 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_html(flight_orders_page(order_id, error=f"Narx yuborilmadi: {exc}"))
                 return
             self.send_html(flight_orders_page(error="Avia buyurtma topilmadi."))
+            return
+        if path == "/flight-payment-confirm":
+            order_id = params.get("id", [""])[0]
+            try:
+                order = confirm_flight_payment(order_id)
+            except Exception as exc:
+                self.send_html(flight_orders_page(order_id, error=f"To'lov tasdiqlash xatosi: {exc}"))
+                return
+            if order:
+                self.send_html(flight_orders_page(order_id, message="To'lov tasdiqlandi. Endi bron qilish mumkin."))
+                return
+            self.send_html(flight_orders_page(error="Avia buyurtma topilmadi."))
+            return
+        if path == "/flight-book":
+            order_id = params.get("id", [""])[0]
+            ok, msg = book_flight_from_panel(order_id)
+            self.send_html(flight_orders_page(order_id, message=msg if ok else "", error="" if ok else msg))
             return
         if path == "/flight-issue":
             if is_multipart_flight_issue:

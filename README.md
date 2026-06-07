@@ -35,6 +35,7 @@ ALLOW_MANUAL_ESIM_FALLBACK=0
 FLIGHT_PROVIDER_MODE=manual
 FLIGHT_API_PROVIDER=
 FLIGHT_API_BASE=
+FLIGHT_API_BOOKING_PATH=/bookings
 FLIGHT_API_KEY=
 CARD_QR_IMAGE=payment_qr.png
 CARD_PAYMENT_NOTE=
@@ -65,9 +66,10 @@ The bot creates a real eSIM through eSIM Go and sends installation details to th
 1. Customer opens `Avia biletlar` and sends route, dates, passenger count, and contact.
 2. Admin opens `Avia buyurtmalar` in the admin panel.
 3. Admin checks a real ticket source, sets price, and sends the offer with QR/card payment instructions.
-4. After payment verification, admin sends PNR, ticket number, ticket URL, or ticket PDF/image from the panel.
+4. Money goes to the owner card/QR account, then admin confirms payment in the panel.
+5. If flight API is configured, admin can run automatic booking/issue from the panel. Otherwise admin sends PNR, ticket number, ticket URL, or ticket PDF/image manually.
 
-`FLIGHT_PROVIDER_MODE=manual` is the default. Real ticket API automation can be connected later through `FLIGHT_API_PROVIDER`, `FLIGHT_API_BASE`, and `FLIGHT_API_KEY`.
+`FLIGHT_PROVIDER_MODE=manual` is the default. Real ticket API automation can be connected later through `FLIGHT_API_PROVIDER`, `FLIGHT_API_BASE`, `FLIGHT_API_BOOKING_PATH`, and `FLIGHT_API_KEY`.
 
 ## Local Run
 
