@@ -14,6 +14,7 @@ Render Free web service 15 daqiqa inbound traffic bo'lmasa uxlaydi. Uyg'onganda 
 - `KEEPALIVE_ENABLED=1` va `KEEPALIVE_INTERVAL_SECONDS=600` qo'ying.
 - Render Free ishlatilsa, tashqi monitoring xizmatida `https://YOUR-SERVICE.onrender.com/health` manziliga 5-10 daqiqada bir ping sozlang.
 - JSON data yo'qolmasligi uchun persistent disk yoki database ishlating. Render Free web service local fayllarni restart/redeploy/spin-down paytida saqlab qolmaydi.
+- Admin panel ichida parol almashtirilganda `ADMIN_PANEL_PASSWORD_HASH` qiymati ko'rsatiladi. Uni Render Environment'ga qo'ying, shunda restart/deploydan keyin ham yangi parol saqlanadi.
 
 Kod ichida `start_koyeb.py` watchdog bor: `bot.py` yiqilsa, avtomatik qayta ishga tushiradi.
 

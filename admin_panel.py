@@ -654,6 +654,15 @@ def verify_admin_password(password: str) -> bool:
         expected = hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
         return hmac.compare_digest(digest, expected)
 
+    env_hash = read_env("ADMIN_PANEL_PASSWORD_HASH")
+    if env_hash.startswith("sha256$"):
+        try:
+            _, salt, digest = env_hash.split("$", 2)
+        except ValueError:
+            return False
+        expected = hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
+        return hmac.compare_digest(digest, expected)
+
     configured = admin_password()
     return bool(configured and hmac.compare_digest(password, configured))
 
@@ -664,7 +673,12 @@ def admin_password() -> str:
 
 def session_secret() -> str:
     config = admin_config()
-    return str(config.get("session_secret") or read_env("ADMIN_PANEL_SECRET", admin_password()))
+    return str(
+        config.get("session_secret")
+        or read_env("ADMIN_PANEL_SECRET")
+        or read_env("ADMIN_PANEL_PASSWORD_HASH")
+        or admin_password()
+    )
 
 
 def webhook_secret() -> str:
@@ -682,12 +696,14 @@ def webhook_path() -> str:
     return f"/telegram-webhook/{secret}" if secret else ""
 
 
-def set_admin_password(new_password: str) -> None:
+def set_admin_password(new_password: str) -> str:
     config = admin_config()
-    config["password_hash"] = hash_admin_password(new_password)
+    password_hash = hash_admin_password(new_password)
+    config["password_hash"] = password_hash
     config["session_secret"] = secrets.token_urlsafe(32)
     config["updated_at"] = datetime.now(timezone.utc).isoformat()
     write_admin_config(config)
+    return password_hash
 
 
 def sign_session(expiry: int) -> str:
@@ -1491,9 +1507,18 @@ def support_state() -> bytes:
     return json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
 
-def settings_page(message: str = "", error: str = ""):
+def settings_page(message: str = "", error: str = "", password_hash: str = ""):
     message_html = f"<p class='badge replied'>{esc(message)}</p>" if message else ""
     error_html = f"<p class='badge open'>{esc(error)}</p>" if error else ""
+    password_hash_html = ""
+    if password_hash:
+        password_hash_html = f"""
+  <div class="panel-section">
+    <h4>Render uchun doimiy parol kodi</h4>
+    <p class="muted">Parol restart/deploydan keyin ham o'zgarmasligi uchun Render Environment ichida <b>ADMIN_PANEL_PASSWORD_HASH</b> qiymatiga shu kodni qo'ying.</p>
+    <textarea readonly>{esc(password_hash)}</textarea>
+  </div>
+"""
     env_fields = [
         ("CARD_HOLDER", admin_t("card_holder")),
         ("CARD_NUMBER", admin_t("card_number")),
@@ -1534,6 +1559,7 @@ def settings_page(message: str = "", error: str = ""):
     <button>{esc(admin_t("change_password_btn"))}</button>
   </form>
   <p class="muted">{esc(admin_t('password_changed_hint'))}</p>
+  {password_hash_html}
 </div>
 <div class="card">
   <h4>{esc(admin_t("bot_payment_settings"))}</h4>
@@ -1547,15 +1573,15 @@ def settings_page(message: str = "", error: str = ""):
     return layout(admin_t("settings"), body)
 
 
-def change_admin_password(current_password: str, new_password: str, confirm_password: str) -> tuple[bool, str]:
+def change_admin_password(current_password: str, new_password: str, confirm_password: str) -> tuple[bool, str, str]:
     if not verify_admin_password(current_password):
-        return False, admin_t("old_password_wrong")
+        return False, admin_t("old_password_wrong"), ""
     if len(new_password) < 8:
-        return False, admin_t("new_password_short")
+        return False, admin_t("new_password_short"), ""
     if new_password != confirm_password:
-        return False, admin_t("new_password_mismatch")
-    set_admin_password(new_password)
-    return True, admin_t("password_changed")
+        return False, admin_t("new_password_mismatch"), ""
+    password_hash = set_admin_password(new_password)
+    return True, admin_t("password_changed"), password_hash
 
 
 def update_bot_settings(params: dict) -> None:
@@ -2321,16 +2347,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(broadcast_page(message=admin_t("broadcast_done").format(sent=sent, failed=failed)))
             return
         if path == "/settings":
-            ok, message = change_admin_password(
+            ok, message, password_hash = change_admin_password(
                 params.get("current_password", [""])[0],
                 params.get("new_password", [""])[0],
                 params.get("confirm_password", [""])[0],
             )
             if ok:
-                self.send_response(303)
-                self.send_header("Location", "/login")
-                self.send_header("Set-Cookie", f"{SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax")
-                self.end_headers()
+                self.send_html(settings_page(message=message, password_hash=password_hash))
                 return
             self.send_html(settings_page(error=message))
             return
